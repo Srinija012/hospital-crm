@@ -1,0 +1,20 @@
+[
+  {
+    "id": "ar-1",
+    "keyword": "timing",
+    "replyText": "Our clinic is open Monday to Friday, 8:00 AM to 6:00 PM. Weekend consults require prior bookings.",
+    "isActive": true
+  },
+  {
+    "id": "ar-2",
+    "keyword": "address",
+    "replyText": "We are located at 100 Healthcare Parkway, Medical District. Free parking is available.",
+    "isActive": true
+  },
+  {
+    "id": "ar-3",
+    "keyword": "help",
+    "replyText": "Hello! Type 'timing' for hours, 'address' for location, or wait for an operator to respond.",
+    "isActive": true
+  }
+]
