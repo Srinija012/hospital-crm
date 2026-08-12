@@ -46,12 +46,12 @@ export function getMigrationError(): string | null {
 
 const INITIAL_DOCTORS: Doctor[] = [
   { id: 'doc-admin', name: 'Dr. Marcus Vance', specialty: 'Clinical Director', department: 'Administration', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=120', email: 'm.vance@hospital.com', activePatients: 0, role: 'Administrator', attendanceRate: 100, salary: 12500, salaryStatus: 'Paid' },
-  { id: 'doc-1', name: 'Dr. Sarah Connor', specialty: 'Cardiologist', department: 'Cardiology', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=120', email: 's.connor@hospital.com', activePatients: 14, role: 'Physician', attendanceRate: 94, salary: 9500, salaryStatus: 'Paid' },
-  { id: 'doc-2', name: 'Dr. James Carter', specialty: 'Pediatrician', department: 'Pediatrics', availability: 'Busy', status: 'Busy', avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=120', email: 'j.carter@hospital.com', activePatients: 22, role: 'Physician', attendanceRate: 98, salary: 8800, salaryStatus: 'Unpaid' },
-  { id: 'doc-3', name: 'Dr. Evelyn Martinez', specialty: 'Dermatologist', department: 'Dermatology', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1594824813573-246434e33963?auto=format&fit=crop&q=80&w=120', email: 'e.martinez@hospital.com', activePatients: 9, role: 'Physician', attendanceRate: 92, salary: 9000, salaryStatus: 'Paid' },
-  { id: 'doc-4', name: 'Dr. Robert Chen', specialty: 'Neurologist', department: 'Neurology', availability: 'On Leave', status: 'On Leave', avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=120', email: 'r.chen@hospital.com', activePatients: 5, role: 'Physician', attendanceRate: 85, salary: 8500, salaryStatus: 'Unpaid' },
-  { id: 'doc-5', name: 'Dr. Amanda Ross', specialty: 'Orthopedic Surgeon', department: 'Orthopedics', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1591604466107-ec97de577aff?auto=format&fit=crop&q=80&w=120', email: 'a.ross@hospital.com', activePatients: 18, role: 'Physician', attendanceRate: 96, salary: 10000, salaryStatus: 'Paid' },
-  { id: 'doc-recep', name: 'Emily Watson', specialty: 'Lead Receptionist', department: 'Front Desk', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1594824813573-246434e33963?auto=format&fit=crop&q=80&w=120&auto=format&fit=crop&q=80&w=120', email: 'e.watson@hospital.com', activePatients: 0, role: 'Receptionist', attendanceRate: 97, salary: 4500, salaryStatus: 'Paid' }
+  { id: 'doc-1', name: 'Dr. Sarah Connor', specialty: 'Cardiologist', department: 'Cardiology', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=120', email: 's.connor@hospital.com', activePatients: 0, role: 'Physician', attendanceRate: 100, salary: 9500, salaryStatus: 'Paid' },
+  { id: 'doc-2', name: 'Dr. James Carter', specialty: 'Pediatrician', department: 'Pediatrics', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=120', email: 'j.carter@hospital.com', activePatients: 0, role: 'Physician', attendanceRate: 100, salary: 8800, salaryStatus: 'Paid' },
+  { id: 'doc-3', name: 'Dr. Evelyn Martinez', specialty: 'Dermatologist', department: 'Dermatology', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1594824813573-246434e33963?auto=format&fit=crop&q=80&w=120', email: 'e.martinez@hospital.com', activePatients: 0, role: 'Physician', attendanceRate: 100, salary: 9000, salaryStatus: 'Paid' },
+  { id: 'doc-4', name: 'Dr. Robert Chen', specialty: 'Neurologist', department: 'Neurology', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=120', email: 'r.chen@hospital.com', activePatients: 0, role: 'Physician', attendanceRate: 100, salary: 8500, salaryStatus: 'Paid' },
+  { id: 'doc-5', name: 'Dr. Amanda Ross', specialty: 'Orthopedic Surgeon', department: 'Orthopedics', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1591604466107-ec97de577aff?auto=format&fit=crop&q=80&w=120', email: 'a.ross@hospital.com', activePatients: 0, role: 'Physician', attendanceRate: 100, salary: 10000, salaryStatus: 'Paid' },
+  { id: 'doc-recep', name: 'Emily Watson', specialty: 'Lead Receptionist', department: 'Front Desk', availability: 'Available', status: 'Available', avatar: 'https://images.unsplash.com/photo-1594824813573-246434e33963?auto=format&fit=crop&q=80&w=120', email: 'e.watson@hospital.com', activePatients: 0, role: 'Receptionist', attendanceRate: 100, salary: 4500, salaryStatus: 'Paid' }
 ];
 
 const INITIAL_WORKFLOWS: AutomationWorkflow[] = [
@@ -404,6 +404,20 @@ export function dbEnforceRole(allowedRoles: string[]) {
     throw new Error(`Access Denied: Role '${role}' is not authorized to perform this operation.`);
   }
 }
+
+export async function dbClearAllData(): Promise<void> {
+  dbEnforceRole(['Clinic Admin', 'Super Admin']);
+  await db.transaction('rw', [db.patients, db.invoices, db.communications, db.auditLogs, db.trashedPatients, db.appSettings], async () => {
+    await db.patients.clear();
+    await db.invoices.clear();
+    await db.communications.clear();
+    await db.auditLogs.clear();
+    await db.trashedPatients.clear();
+    await db.appSettings.put({ key: 'h_appointments_up', value: [] });
+    await db.appSettings.put({ key: 'h_followups_up', value: [] });
+  });
+}
+
 
 // ─── DOCTORS ───
 export async function dbGetDoctors(): Promise<Doctor[]> {

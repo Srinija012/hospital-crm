@@ -43,6 +43,7 @@ import {
   dbUnpayDoctorSalary,
   dbSaveClinic,
   dbDeleteClinic,
+  dbClearAllData,
   getActiveRole,
   dbEnforceRole,
   Doctor,
@@ -132,6 +133,18 @@ export default function AdminPanelPage() {
       triggerNotice(`Seeding failed: ${err.message}`)
     } finally {
       setSeeding(false)
+    }
+  }
+
+  const handleClearAllData = async () => {
+    if (!confirm("Are you sure you want to delete all dummy patient, appointment, follow-up, invoice, and communication records? This action cannot be undone.")) {
+      return
+    }
+    try {
+      await dbClearAllData()
+      triggerNotice("All dummy patient and transaction records have been successfully purged!")
+    } catch (err: any) {
+      triggerNotice(`Failed to clear database: ${err.message}`)
     }
   }
 
@@ -377,9 +390,14 @@ export default function AdminPanelPage() {
                 <CardTitle className="text-sm font-bold">Staff Attendance Log</CardTitle>
                 <CardDescription className="text-xxs">Record daily attendance, affecting monthly stats.</CardDescription>
               </div>
-              <Button onClick={handleOpenAddStaff} size="sm" className="h-8 text-xxs flex items-center gap-1 cursor-pointer">
-                <Plus className="h-3.5 w-3.5" /> Add Staff Member
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button onClick={handleClearAllData} variant="destructive" size="sm" className="h-8 text-xxs flex items-center gap-1 cursor-pointer">
+                  <Trash2 className="h-3.5 w-3.5" /> Purge Demo Data
+                </Button>
+                <Button onClick={handleOpenAddStaff} size="sm" className="h-8 text-xxs flex items-center gap-1 cursor-pointer">
+                  <Plus className="h-3.5 w-3.5" /> Add Staff Member
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">

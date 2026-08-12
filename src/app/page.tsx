@@ -117,7 +117,7 @@ export default function Dashboard() {
 
   // Key Statistics
   const totalPatients = patients.length
-  const todayStr = "2026-06-08"
+  const todayStr = new Date().toISOString().split("T")[0]
   const todayAppointments = appointments.filter(a => a.date === todayStr && a.status !== "Cancelled")
   const activeDoctors = doctors.filter(d => d.availability === "Available").length
   
