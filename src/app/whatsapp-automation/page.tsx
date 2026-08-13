@@ -336,7 +336,7 @@ export default function WhatsAppAutomation() {
 
             {/* Tab 1: Event Templates */}
             <TabsContent value="templates">
-              <Card className="shadow-xs">
+              <Card className="shadow-xs overflow-y-auto" style={{maxHeight: 'calc(100vh - 120px)'}}>
                 <CardHeader>
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
                     <MessageCircle className="h-5 w-5 text-primary" /> Template Editor
