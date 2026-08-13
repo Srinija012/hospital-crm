@@ -322,9 +322,9 @@ export default function WhatsAppAutomation() {
         </div>
       )}
 
-      {/* Main split grid */}
+      {/* Main split grid — items-start so columns don't force each other's height */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3 items-start">
           {/* Left side Tab container */}
           <div className={`${activeTab === "workflows" ? "md:col-span-3" : "md:col-span-2"} space-y-6`}>
             <TabsList className="grid grid-cols-4 w-full max-w-[620px] bg-muted/60 text-[10px] mb-6">
@@ -703,9 +703,9 @@ export default function WhatsAppAutomation() {
           </div>
 
 
-        {/* Right side live rendering simulator — sticky so it doesn't push left column down */}
+        {/* Right side live rendering simulator */}
         {activeTab !== "workflows" && (
-          <Card className="flex flex-col justify-between shadow-xs self-start sticky top-0">
+          <Card className="flex flex-col shadow-xs overflow-y-auto" style={{maxHeight: 'calc(100vh - 120px)'}}>
             <div>
               <CardHeader className="pb-3 border-b border-border/40 bg-muted/10">
                 <CardTitle className="text-sm font-bold flex items-center gap-1.5">
