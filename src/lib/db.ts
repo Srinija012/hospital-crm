@@ -494,6 +494,29 @@ export async function dbSaveDoctor(doc: Omit<Doctor, 'id' | 'status'> & { id?: s
     status: doc.availability
   } as Doctor;
   await db.doctors.put(newDoc);
+
+  (async () => {
+    try {
+      await supabase.from('doctors').upsert([{
+        id: newDoc.id,
+        name: newDoc.name,
+        specialty: newDoc.specialty,
+        department: newDoc.department,
+        availability: newDoc.availability,
+        avatar: newDoc.avatar,
+        email: newDoc.email,
+        active_patients: newDoc.activePatients,
+        role: newDoc.role,
+        attendance_rate: newDoc.attendanceRate,
+        salary: newDoc.salary,
+        salary_status: newDoc.salaryStatus,
+        status: newDoc.status
+      }]);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Doctor Warning]', err?.message || err);
+    }
+  })();
+
   return newDoc;
 }
 
@@ -773,6 +796,26 @@ export async function dbAddCommunicationLog(patientId: string, log: Omit<Communi
   await db.communications.put(newLog);
   capCommunicationsInBackground(patientId);
 
+  (async () => {
+    try {
+      await supabase.from('communications').upsert([{
+        id: newLog.id,
+        patient_id: newLog.patientId,
+        type: newLog.type,
+        channel: newLog.channel,
+        direction: newLog.direction,
+        content: newLog.content,
+        timestamp: newLog.timestamp,
+        status: newLog.status,
+        media_url: newLog.mediaUrl,
+        media_type: newLog.mediaType,
+        whatsapp_message_id: newLog.whatsappMessageId
+      }]);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Comm Warning]', err?.message || err);
+    }
+  })();
+
   const finalComms = await db.communications.where('patientId').equals(patientId).toArray();
   patient.communications = finalComms;
   return patient;
@@ -798,6 +841,27 @@ export async function dbAddMultipleCommunicationLogs(
 
   await db.communications.bulkPut(commsToInsert);
   capCommunicationsInBackground(patientId);
+
+  (async () => {
+    try {
+      const mappedLogs = commsToInsert.map(l => ({
+        id: l.id,
+        patient_id: l.patientId,
+        type: l.type,
+        channel: l.channel,
+        direction: l.direction,
+        content: l.content,
+        timestamp: l.timestamp,
+        status: l.status,
+        media_url: l.mediaUrl,
+        media_type: l.mediaType,
+        whatsapp_message_id: l.whatsappMessageId
+      }));
+      await supabase.from('communications').upsert(mappedLogs);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Comms Warning]', err?.message || err);
+    }
+  })();
 
   const finalComms = await db.communications.where('patientId').equals(patientId).toArray();
   patient.communications = finalComms;
@@ -903,6 +967,26 @@ export async function dbSaveAppointment(appointment: Omit<Appointment, 'id'> & {
 
   await setSetting('h_appointments_up', appointments);
 
+  (async () => {
+    try {
+      await supabase.from('appointments').upsert([{
+        id: newApt.id,
+        patient_id: newApt.patientId,
+        patient_name: newApt.patientName,
+        doctor_id: newApt.doctorId,
+        doctor_name: newApt.doctorName,
+        date: newApt.date,
+        time_slot: newApt.timeSlot,
+        department: newApt.department,
+        status: newApt.status,
+        notes: newApt.notes,
+        cost: newApt.cost
+      }]);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Apt Warning]', err?.message || err);
+    }
+  })();
+
   if (newApt.status === 'Confirmed' && (isNew || oldApt?.status !== 'Confirmed')) {
     await dbTriggerWorkflow("Appointment Confirmed", { appointment: newApt });
   }
@@ -926,6 +1010,27 @@ export async function dbUpdateAppointmentStatus(id: string, status: Appointment[
     const oldStatus = appointments[index].status;
     appointments[index].status = status;
     await setSetting('h_appointments_up', appointments);
+
+    const updatedApt = appointments[index];
+    (async () => {
+      try {
+        await supabase.from('appointments').upsert([{
+          id: updatedApt.id,
+          patient_id: updatedApt.patientId,
+          patient_name: updatedApt.patientName,
+          doctor_id: updatedApt.doctorId,
+          doctor_name: updatedApt.doctorName,
+          date: updatedApt.date,
+          time_slot: updatedApt.timeSlot,
+          department: updatedApt.department,
+          status: updatedApt.status,
+          notes: updatedApt.notes,
+          cost: updatedApt.cost
+        }]);
+      } catch (err: any) {
+        console.warn('[Supabase Sync Apt Warning]', err?.message || err);
+      }
+    })();
 
     if (status === 'Confirmed' && oldStatus !== 'Confirmed') {
       await dbTriggerWorkflow("Appointment Confirmed", { appointment: appointments[index] });
@@ -987,6 +1092,27 @@ export async function dbSaveFollowUp(fup: Omit<FollowUp, 'id'> & { id?: string }
   }
 
   await setSetting('h_followups_up', followups);
+
+  (async () => {
+    try {
+      await supabase.from('follow_ups').upsert([{
+        id: newFup.id,
+        patient_id: newFup.patientId,
+        patient_name: newFup.patientName,
+        age: newFup.age,
+        phone: newFup.phone,
+        last_visit_date: newFup.lastVisitDate,
+        follow_up_date: newFup.followUpDate,
+        follow_up_time: newFup.followUpTime,
+        doctor_id: newFup.doctorId,
+        doctor_name: newFup.doctorName,
+        status: newFup.status,
+        custom_message: newFup.customMessage
+      }]);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Fup Warning]', err?.message || err);
+    }
+  })();
 
   if (typeof window !== "undefined" && newFup.status !== 'Completed') {
     const patient = await db.patients.get(newFup.patientId);
@@ -1112,6 +1238,24 @@ export async function dbSaveInvoice(invoice: Omit<Invoice, 'id'> & { id?: string
   } as Invoice;
 
   await db.invoices.put(newInv);
+
+  (async () => {
+    try {
+      await supabase.from('invoices').upsert([{
+        id: newInv.id,
+        invoice_no: newInv.invoiceNo,
+        patient_id: newInv.patientId,
+        patient_name: newInv.patientName,
+        date: newInv.date,
+        amount: newInv.amount,
+        status: newInv.status,
+        created_at: newInv.createdAt
+      }]);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Inv Warning]', err?.message || err);
+    }
+  })();
+
   await dbTriggerWorkflow("Invoice Created", { invoice: newInv });
   return newInv;
 }
@@ -1121,6 +1265,23 @@ export async function dbPayInvoice(id: string): Promise<Invoice[]> {
   const inv = await db.invoices.get(id);
   if (inv) {
     await db.invoices.update(id, { status: 'Paid' });
+
+    (async () => {
+      try {
+        await supabase.from('invoices').upsert([{
+          id: inv.id,
+          invoice_no: inv.invoiceNo,
+          patient_id: inv.patientId,
+          patient_name: inv.patientName,
+          date: inv.date,
+          amount: inv.amount,
+          status: 'Paid',
+          created_at: inv.createdAt
+        }]);
+      } catch (err: any) {
+        console.warn('[Supabase Sync Inv Warning]', err?.message || err);
+      }
+    })();
     
     if (inv.status !== 'Paid') {
       await dbTriggerWorkflow("Bill Settle Complete", { invoice: { ...inv, status: 'Paid' } });
@@ -1281,6 +1442,24 @@ export async function dbAddAuditLog(log: Omit<AuditLogEntry, 'id' | 'timestamp' 
 
   await db.auditLogs.put(newEntry);
   capAuditLogsInBackground();
+
+  (async () => {
+    try {
+      await supabase.from('audit_logs').upsert([{
+        id: newEntry.id,
+        timestamp: newEntry.timestamp,
+        staff_name: newEntry.staffName,
+        staff_role: newEntry.staffRole,
+        actor_role: newEntry.actorRole,
+        entity_type: newEntry.entityType,
+        patient_id: newEntry.patientId,
+        patient_name: newEntry.patientName,
+        action: newEntry.action
+      }]);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Audit Log Warning]', err?.message || err);
+    }
+  })();
 
   return newEntry;
 }
