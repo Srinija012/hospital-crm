@@ -274,10 +274,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
   // Auto-Align Nodes in 2D Horizontal Grid (n8n Left-to-Right Flow)
   const autoAlign2DPositions = (stepsCount: number) => {
     const newPos: Record<number | string, NodePosition> = {}
-    // Trigger Start Node at (X: 50, Y: 220)
     newPos["trigger"] = { x: 50, y: 220 }
-    
-    // Position steps horizontally from left to right: X = 320, 590, 860, 1130...
     for (let i = 0; i < stepsCount; i++) {
       newPos[i] = { x: 320 + i * 270, y: 220 }
     }
@@ -300,6 +297,40 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
       autoAlign2DPositions(activeWorkflow.steps.length)
     }
   }, [activeWorkflow?.id, activeWorkflow?.steps.length])
+
+  // GLOBAL MOUSE MOVE & MOUSE UP HANDLERS FOR ROCK-SOLID DRAGGING & PANNING
+  React.useEffect(() => {
+    if (!isPanning && draggingNodeId === null) return
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      if (isPanning) {
+        setCanvasPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
+      } else if (draggingNodeId !== null) {
+        const scale = zoomLevel / 100
+        const currentMouseX = (e.clientX - canvasPan.x) / scale
+        const currentMouseY = (e.clientY - canvasPan.y) / scale
+        setNodePositions(prev => ({
+          ...prev,
+          [draggingNodeId]: {
+            x: currentMouseX - dragOffset.x,
+            y: currentMouseY - dragOffset.y
+          }
+        }))
+      }
+    }
+
+    const handleWindowMouseUp = () => {
+      setIsPanning(false)
+      setDraggingNodeId(null)
+    }
+
+    window.addEventListener('mousemove', handleWindowMouseMove)
+    window.addEventListener('mouseup', handleWindowMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove)
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+    }
+  }, [isPanning, draggingNodeId, panStart, canvasPan, dragOffset, zoomLevel])
 
   // Create New Workflow
   const handleCreateNewWorkflow = async () => {
@@ -351,8 +382,6 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
     if (target.closest('.n8n-node-card')) return
-    if (target.closest('header')) return
-    if (target.closest('.n8n-step-bar')) return
     if (target.closest('.n8n-sidebar')) return
     if (target.closest('.n8n-inspector')) return
 
@@ -360,27 +389,26 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y })
   }
 
-  const handleCanvasMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      setCanvasPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
-    } else if (draggingNodeId !== null) {
-      const newX = e.clientX - dragOffset.x
-      const newY = e.clientY - dragOffset.y
-      setNodePositions(prev => ({ ...prev, [draggingNodeId]: { x: newX, y: newY } }))
+  // MOUSE WHEEL ZOOM EXCLUSIVELY FOR CANVAS NODE LAYER
+  const handleWheelZoom = (e: React.WheelEvent) => {
+    e.preventDefault()
+    if (e.deltaY < 0) {
+      setZoomLevel(prev => Math.min(160, prev + 5))
+    } else {
+      setZoomLevel(prev => Math.max(50, prev - 5))
     }
   }
 
-  const handleCanvasMouseUp = () => {
-    setIsPanning(false)
-    setDraggingNodeId(null)
-  }
-
-  // NODE 2D DRAGGING HANDLERS
+  // NODE 2D DRAGGING START HANDLER
   const handleNodeMouseDown = (e: React.MouseEvent, id: number | string) => {
     e.stopPropagation()
+    const scale = zoomLevel / 100
     const pos = nodePositions[id] || { x: 100, y: 100 }
+    const clickX = (e.clientX - canvasPan.x) / scale
+    const clickY = (e.clientY - canvasPan.y) / scale
+
     setDraggingNodeId(id)
-    setDragOffset({ x: e.clientX - pos.x, y: e.clientY - pos.y })
+    setDragOffset({ x: clickX - pos.x, y: clickY - pos.y })
   }
 
   // ADD NODE FROM (+) BUTTON OR DRAG-DROP
@@ -509,8 +537,8 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
         </div>
       )}
 
-      {/* FIXED TOP n8n CONTROL TOOLBAR */}
-      <header className="h-14 border-b border-slate-800 bg-slate-900 px-4 flex items-center justify-between z-40 shrink-0 sticky top-0">
+      {/* 100% STATIONARY TOP CONTROL TOOLBAR */}
+      <header className="h-14 border-b border-slate-800 bg-slate-900 px-4 flex items-center justify-between z-40 shrink-0 select-none">
         
         {/* Left: Workflow Selector & Name */}
         <div className="flex items-center gap-3">
@@ -637,9 +665,9 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
         )}
       </header>
 
-      {/* FIXED HORIZONTAL STEP NODE NAVIGATOR BAR */}
+      {/* 100% STATIONARY HORIZONTAL STEP NODE NAVIGATOR BAR */}
       {activeTab === "builder" && activeWorkflow && (
-        <div className="n8n-step-bar h-10 bg-slate-900 border-b border-slate-800 px-4 flex items-center gap-2 text-xs overflow-x-auto z-40 shrink-0 sticky top-14">
+        <div className="h-10 bg-slate-900 border-b border-slate-800 px-4 flex items-center gap-2 text-xs overflow-x-auto z-40 shrink-0 select-none">
           <span className="text-[10px] font-extrabold uppercase text-slate-400 flex items-center gap-1 shrink-0">
             <Compass className="h-3.5 w-3.5 text-emerald-400" /> Jump to Step:
           </span>
@@ -676,8 +704,8 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
         {/* TAB 1: 2D n8n INFINITE CANVAS GRAPH */}
         {activeTab === "builder" && activeWorkflow && (
           <>
-            {/* COLLAPSIBLE LEFT PALETTE SIDEBAR */}
-            <div className={`n8n-sidebar transition-all duration-300 border-r border-slate-800 bg-slate-900 flex flex-col shrink-0 z-30 ${sidebarOpen ? 'w-72' : 'w-12'}`}>
+            {/* 100% STATIONARY PALETTE LIBRARY SIDEBAR */}
+            <div className={`n8n-sidebar transition-all duration-300 border-r border-slate-800 bg-slate-900 flex flex-col shrink-0 z-30 select-none ${sidebarOpen ? 'w-72' : 'w-12'}`}>
               
               <div className="p-3 border-b border-slate-800 flex items-center justify-between">
                 {sidebarOpen ? (
@@ -756,11 +784,10 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               )}
             </div>
 
-            {/* CENTER 2D CANVAS GRAPH WITH SVG BEZIER CURVED LINES */}
+            {/* CENTER 2D GRAPH CANVAS (PANNING & ZOOMING IS EXCLUSIVELY CONFINED TO THIS INNER CANVAS) */}
             <div
               onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
+              onWheel={handleWheelZoom}
               className={`flex-1 bg-slate-950 relative overflow-hidden cursor-grab active:cursor-grabbing ${
                 isPanning ? 'cursor-grabbing' : ''
               }`}
@@ -773,9 +800,9 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               />
 
               {/* FLOATING ZOOM CONTROLS (BOTTOM LEFT) */}
-              <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-slate-900 border border-slate-800 backdrop-blur-md p-1.5 rounded-xl shadow-2xl">
+              <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-slate-900 border border-slate-800 backdrop-blur-md p-1.5 rounded-xl shadow-2xl select-none">
                 <button
-                  onClick={() => setZoomLevel(prev => Math.max(70, prev - 15))}
+                  onClick={() => setZoomLevel(prev => Math.max(50, prev - 15))}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Zoom Out"
                 >
@@ -783,7 +810,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 </button>
                 <span className="text-[10px] font-mono font-bold text-slate-300 px-1">{zoomLevel}%</span>
                 <button
-                  onClick={() => setZoomLevel(prev => Math.min(130, prev + 15))}
+                  onClick={() => setZoomLevel(prev => Math.min(160, prev + 15))}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Zoom In"
                 >
@@ -798,13 +825,13 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 </button>
               </div>
 
-              {/* 2D CANVAS CONTAINER LAYER */}
+              {/* 2D WORKFLOW NODE LAYER (TRANSFORMED & ZOOMED IN/OUT EXCLUSIVELY) */}
               <div
                 style={{
                   transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${zoomLevel / 100})`,
                   transformOrigin: '0 0'
                 }}
-                className="absolute inset-0 pointer-events-none transition-transform duration-100"
+                className="absolute inset-0 pointer-events-none transition-transform duration-75"
               >
                 
                 {/* SVG LAYER FOR CUBIC BEZIER VECTOR CURVES */}
@@ -932,9 +959,9 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               </div>
             </div>
 
-            {/* RIGHT SIDE INSPECTOR DRAWER (n8n NODE SETTINGS) */}
+            {/* 100% STATIONARY NODE INSPECTOR DRAWER */}
             {inspectorNodeIdx !== null && activeWorkflow.steps[inspectorNodeIdx] && (
-              <div className="n8n-inspector w-88 border-l border-slate-800 bg-slate-900 p-4 flex flex-col justify-between shrink-0 z-30 shadow-2xl animate-in slide-in-from-right-6 duration-200">
+              <div className="n8n-inspector w-88 border-l border-slate-800 bg-slate-900 p-4 flex flex-col justify-between shrink-0 z-30 shadow-2xl animate-in slide-in-from-right-6 duration-200 select-none">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div className="flex items-center gap-2">
