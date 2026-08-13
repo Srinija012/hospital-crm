@@ -11,6 +11,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "clsx": "^2.1.1",
     "concurrently": "^10.0.3",
