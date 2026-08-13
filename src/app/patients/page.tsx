@@ -245,18 +245,15 @@ function PatientsRegistryContent() {
   React.useEffect(() => {
     const loadRegTemplates = async () => {
       try {
-        // --- Welcome template ---
+        // Since "Save Template" always auto-translates English to all languages,
+        // just fetch the saved translation directly — it will be the user's custom text
         let welcomeText = await dbGetWhatsAppTemplate("welcome", formLang)
-        const hardcodedWelcomeForLang = TRANSLATED_WELCOME[formLang] || TRANSLATED_WELCOME.English || ""
-        const isWelcomeDefault = !welcomeText || welcomeText === hardcodedWelcomeForLang
 
-        // If the saved template for this language is just the default, try to use
-        // the custom English template and auto-translate it
-        if (isWelcomeDefault && formLang !== "English") {
+        // If missing for this language, fall back to the saved English template
+        if (!welcomeText && formLang !== "English") {
           const englishText = await dbGetWhatsAppTemplate("welcome", "English")
-          const hardcodedEnglish = TRANSLATED_WELCOME.English || ""
-          const hasCustomEnglish = englishText && englishText !== hardcodedEnglish
-          if (hasCustomEnglish) {
+          if (englishText) {
+            // On-the-fly translate if no translation was pre-saved
             const langCodeMap: Record<string, string> = {
               Telugu: "te", Hindi: "hi", Tamil: "ta",
               Kannada: "kn", Malayalam: "ml", Marathi: "mr",
@@ -269,18 +266,25 @@ function PatientsRegistryContent() {
                 const res = await fetch(url)
                 const data = await res.json()
                 if (data && data[0]) {
-                  const translated = data[0].map((x: any) => x[0]).join("")
-                  await dbSaveWhatsAppTemplate("welcome", formLang, translated)
-                  welcomeText = translated
+                  welcomeText = data[0].map((x: any) => x[0]).join("")
+                  await dbSaveWhatsAppTemplate("welcome", formLang, welcomeText)
                 }
               } catch {
-                // Fall through to default
+                welcomeText = englishText // fallback to English text
               }
+            } else {
+              welcomeText = englishText
             }
           }
         }
 
-        setRegWelcomeTemplate(welcomeText || hardcodedWelcomeForLang || "Hello {Patient Name}, welcome!")
+        setRegWelcomeTemplate(
+          welcomeText
+          || MULTILINGUAL_TEMPLATES.welcome?.[formLang]
+          || TRANSLATED_WELCOME[formLang]
+          || TRANSLATED_WELCOME.English
+          || "Hello {Patient Name}, welcome!"
+        )
 
         // --- Follow-up reminder template ---
         const fupText = await dbGetWhatsAppTemplate("follow_up_reminder", formLang)

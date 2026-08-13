@@ -1530,48 +1530,45 @@ async function getResolvedMessageTemplate(
 
   const lang = patient.preferredLanguage || "English";
 
-  // Try to fetch saved template for this patient's language
+  // Fetch the saved template for the patient's language directly from DB.
+  // Since "Save Template" now auto-translates English to all languages,
+  // this will always contain the user's custom text (not the hardcoded default).
   let text = await dbGetWhatsAppTemplate(templateKey, lang);
 
-  // Check if this is just the hardcoded default (user hasn't saved a custom version for this language)
-  const hardcodedForLang = MULTILINGUAL_TEMPLATES[templateKey]?.[lang] || "";
-  const isDefaultFallback = !text || text === hardcodedForLang;
-
-  if (isDefaultFallback && lang !== "English") {
-    // Check if the user has saved a CUSTOM English template
+  // Safety net: if the patient's language template is missing, use the saved
+  // English template and translate it on the fly right now
+  if (!text && lang !== "English" && typeof window !== "undefined") {
     const englishText = await dbGetWhatsAppTemplate(templateKey, "English");
-    const hardcodedEnglish = MULTILINGUAL_TEMPLATES[templateKey]?.English || "";
-    const hasCustomEnglish = englishText && englishText !== hardcodedEnglish;
-
-    if (hasCustomEnglish) {
-      // Auto-translate the custom English template to the patient's language
+    if (englishText) {
       const langCodeMap: Record<string, string> = {
         Telugu: "te", Hindi: "hi", Tamil: "ta",
         Kannada: "kn", Malayalam: "ml", Marathi: "mr",
         Bengali: "bn", Gujarati: "gu", Punjabi: "pa"
       };
       const targetCode = langCodeMap[lang];
-      if (targetCode && typeof window !== "undefined") {
+      if (targetCode) {
         try {
           const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetCode}&dt=t&q=${encodeURIComponent(englishText)}`;
           const res = await fetch(url);
           const data = await res.json();
           if (data && data[0]) {
-            const translated = data[0].map((x: any) => x[0]).join("");
-            // Save the translated version so future sends don't need to re-translate
-            await dbSaveWhatsAppTemplate(templateKey, lang, translated);
-            text = translated;
+            text = data[0].map((x: any) => x[0]).join("");
+            await dbSaveWhatsAppTemplate(templateKey, lang, text);
           }
         } catch {
-          // Translation failed — fall through to use whatever we have
+          text = englishText; // fallback to English if translation fails
         }
+      } else {
+        text = englishText;
       }
     }
   }
 
-  // If still empty, fall back to hardcoded default
+  // Final fallback to hardcoded multilingual default
   if (!text) {
-    text = hardcodedForLang || MULTILINGUAL_TEMPLATES[templateKey]?.English || "";
+    text = MULTILINGUAL_TEMPLATES[templateKey]?.[lang]
+      || MULTILINGUAL_TEMPLATES[templateKey]?.English
+      || "";
   }
 
   const dateStr = context.appointment?.date || new Date().toISOString().split('T')[0];

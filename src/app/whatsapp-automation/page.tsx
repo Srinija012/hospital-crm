@@ -143,50 +143,65 @@ export default function WhatsAppAutomation() {
     loadTemplate()
   }, [selectedTemplateKey, activeLang])
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault()
-    await dbSaveWhatsAppTemplate(selectedTemplateKey, activeLang, templateText)
-    setSuccessMsg("WhatsApp Automation template saved successfully!")
-    setTimeout(() => setSuccessMsg(""), 3000)
-  }
-
-  // Auto-translate the current template into all supported languages and save each one
-  const handleSaveAndTranslateAll = async () => {
-    if (!templateText.trim()) return
-    setIsTranslatingAll(true)
-
-    // First save the current language version
-    await dbSaveWhatsAppTemplate(selectedTemplateKey, activeLang, templateText)
-
+  // Core translate-all helper: translates sourceText into all 6 languages and saves them
+  const translateAndSaveAll = async (templateKey: string, sourceText: string, sourceLang: string) => {
     const langCodeMap: Record<string, string> = {
-      English: "",
-      Telugu: "te",
-      Hindi: "hi",
-      Tamil: "ta",
-      Kannada: "kn",
-      Malayalam: "ml",
-      Marathi: "mr"
+      Telugu: "te", Hindi: "hi", Tamil: "ta",
+      Kannada: "kn", Malayalam: "ml", Marathi: "mr"
     }
-
     const results: string[] = []
     for (const [lang, code] of Object.entries(langCodeMap)) {
-      if (lang === activeLang || !code) continue
+      if (lang === sourceLang) continue
       try {
-        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${code}&dt=t&q=${encodeURIComponent(templateText)}`
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${code}&dt=t&q=${encodeURIComponent(sourceText)}`
         const res = await fetch(url)
         const data = await res.json()
         if (data && data[0]) {
           const translated = data[0].map((x: any) => x[0]).join("")
-          await dbSaveWhatsAppTemplate(selectedTemplateKey, lang, translated)
+          await dbSaveWhatsAppTemplate(templateKey, lang, translated)
           results.push(lang)
         }
       } catch {
-        // Skip languages that fail
+        // Skip failing languages silently
       }
     }
+    return results
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!templateText.trim()) return
+    setIsTranslatingAll(true)
+
+    // Always save the current language first
+    await dbSaveWhatsAppTemplate(selectedTemplateKey, activeLang, templateText)
+
+    // If editing English, auto-translate to all other languages immediately
+    // so every patient language always gets the user's custom message
+    let results: string[] = []
+    if (activeLang === "English") {
+      results = await translateAndSaveAll(selectedTemplateKey, templateText, "English")
+      setSuccessMsg(`Template saved & auto-translated to: ${results.join(", ") || "(none)"}`)
+    } else {
+      setSuccessMsg("Template saved successfully!")
+    }
+
+    // Refresh preview textarea so switching languages shows updated translations
+    const refreshed = await dbGetWhatsAppTemplate(selectedTemplateKey, activeLang)
+    setTemplateText(refreshed || templateText)
 
     setIsTranslatingAll(false)
-    setSuccessMsg(`Template saved in ${activeLang} and auto-translated to: ${results.join(", ") || "(none)"}`)
+    setTimeout(() => setSuccessMsg(""), 5000)
+  }
+
+  // "Save & Auto-Translate All" button — same as Save but always translates even for non-English
+  const handleSaveAndTranslateAll = async () => {
+    if (!templateText.trim()) return
+    setIsTranslatingAll(true)
+    await dbSaveWhatsAppTemplate(selectedTemplateKey, activeLang, templateText)
+    const results = await translateAndSaveAll(selectedTemplateKey, templateText, activeLang)
+    setIsTranslatingAll(false)
+    setSuccessMsg(`Saved in ${activeLang} + auto-translated to: ${results.join(", ") || "(none)"}`)
     setTimeout(() => setSuccessMsg(""), 5000)
   }
 
