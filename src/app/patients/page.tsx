@@ -83,6 +83,8 @@ import {
   dbArchivePatient,
   dbRestorePatient,
   dbMovePatientToTrash,
+  dbTriggerWorkflow,
+  dbSaveWhatsAppTemplate,
   DuplicateMatch
 } from "@/lib/db"
 import { useToast } from "@/components/ui/toast"
@@ -446,7 +448,7 @@ function PatientsRegistryContent() {
       enableAutomatedFollowUp: formEnableAutoFup,
       customFollowUpDays: fupDays,
       customFollowUpMessage: formFupMessage
-    }).then((newPat) => {
+    }).then(async (newPat) => {
       // Reset fields
       setFormName("")
       setFormPhone("")
@@ -470,6 +472,49 @@ function PatientsRegistryContent() {
       setDrawerTab("overview")
       toast.success(isEditingPatient ? "Patient profile updated successfully!" : "Patient file registered successfully!")
       triggerNotice(isEditingPatient ? "Patient profile updated successfully!" : "Patient file registered successfully!")
+
+      // ── Fire "Patient Registered" workflow trigger for new patients ──────────
+      // This sends the welcome WhatsApp message in the patient's preferred language
+      if (!isEditingPatient && newPat) {
+        try {
+          const patLang = newPat.preferredLanguage || "English"
+
+          // If the patient's language is not English, auto-translate and save the
+          // welcome template for that language so they receive a personalised message
+          if (patLang !== "English") {
+            const englishTemplate = await dbGetWhatsAppTemplate("welcome", "English")
+            const existingTranslation = await dbGetWhatsAppTemplate("welcome", patLang)
+
+            // Only translate if no custom translation exists for this language yet
+            if (!existingTranslation && englishTemplate) {
+              const langCodeMap: Record<string, string> = {
+                Telugu: "te", Hindi: "hi", Tamil: "ta",
+                Kannada: "kn", Malayalam: "ml", Marathi: "mr",
+                Bengali: "bn", Gujarati: "gu", Punjabi: "pa"
+              }
+              const targetCode = langCodeMap[patLang]
+              if (targetCode) {
+                try {
+                  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetCode}&dt=t&q=${encodeURIComponent(englishTemplate)}`
+                  const res = await fetch(url)
+                  const data = await res.json()
+                  if (data && data[0]) {
+                    const translated = data[0].map((x: any) => x[0]).join("")
+                    await dbSaveWhatsAppTemplate("welcome", patLang, translated)
+                  }
+                } catch {
+                  // Translation unavailable — will fall back to English template
+                }
+              }
+            }
+          }
+
+          // Trigger the automation workflow (sends WhatsApp via scheduled message)
+          await dbTriggerWorkflow("Patient Registered", { patient: newPat })
+        } catch (err) {
+          console.warn("Workflow trigger failed:", err)
+        }
+      }
     }).catch((err) => {
       toast.error("Failed to save patient record: " + err.message)
     }).finally(() => {

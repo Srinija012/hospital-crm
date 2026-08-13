@@ -75,6 +75,7 @@ export default function WhatsAppAutomation() {
   const [selectedTemplateKey, setSelectedTemplateKey] = React.useState("welcome")
   const [activeLang, setActiveLang] = React.useState("English")
   const [templateText, setTemplateText] = React.useState("")
+  const [isTranslatingAll, setIsTranslatingAll] = React.useState(false)
   const [successMsg, setSuccessMsg] = React.useState("")
 
   // Keyword rules states
@@ -147,6 +148,46 @@ export default function WhatsAppAutomation() {
     await dbSaveWhatsAppTemplate(selectedTemplateKey, activeLang, templateText)
     setSuccessMsg("WhatsApp Automation template saved successfully!")
     setTimeout(() => setSuccessMsg(""), 3000)
+  }
+
+  // Auto-translate the current template into all supported languages and save each one
+  const handleSaveAndTranslateAll = async () => {
+    if (!templateText.trim()) return
+    setIsTranslatingAll(true)
+
+    // First save the current language version
+    await dbSaveWhatsAppTemplate(selectedTemplateKey, activeLang, templateText)
+
+    const langCodeMap: Record<string, string> = {
+      English: "",
+      Telugu: "te",
+      Hindi: "hi",
+      Tamil: "ta",
+      Kannada: "kn",
+      Malayalam: "ml",
+      Marathi: "mr"
+    }
+
+    const results: string[] = []
+    for (const [lang, code] of Object.entries(langCodeMap)) {
+      if (lang === activeLang || !code) continue
+      try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${code}&dt=t&q=${encodeURIComponent(templateText)}`
+        const res = await fetch(url)
+        const data = await res.json()
+        if (data && data[0]) {
+          const translated = data[0].map((x: any) => x[0]).join("")
+          await dbSaveWhatsAppTemplate(selectedTemplateKey, lang, translated)
+          results.push(lang)
+        }
+      } catch {
+        // Skip languages that fail
+      }
+    }
+
+    setIsTranslatingAll(false)
+    setSuccessMsg(`Template saved in ${activeLang} and auto-translated to: ${results.join(", ") || "(none)"}`)
+    setTimeout(() => setSuccessMsg(""), 5000)
   }
 
   const handleAddRule = async () => {
@@ -285,7 +326,19 @@ export default function WhatsAppAutomation() {
                       </div>
                     </div>
                   </CardContent>
-                  <CardFooter className="justify-end border-t border-border/40 pt-4">
+                  <CardFooter className="justify-end border-t border-border/40 pt-4 gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isTranslatingAll}
+                      onClick={handleSaveAndTranslateAll}
+                      className="cursor-pointer text-xs gap-1.5"
+                      title="Saves this template and auto-translates it to Telugu, Hindi, Tamil, Kannada, Malayalam, and Marathi"
+                    >
+                      <Languages className="h-3.5 w-3.5 text-primary" />
+                      {isTranslatingAll ? "Translating..." : "Save & Auto-Translate All Languages"}
+                    </Button>
                     <Button type="submit" size="sm" className="cursor-pointer">
                       <Save className="h-4 w-4 mr-1.5" /> Save Template
                     </Button>
