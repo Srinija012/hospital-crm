@@ -460,12 +460,15 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     setInspectorText(activeWorkflow.steps[idx])
   }
 
-  const handleSaveInspector = () => {
+  const handleSaveInspector = async () => {
     if (!activeWorkflow || inspectorNodeIdx === null) return
     const newSteps = [...activeWorkflow.steps]
     newSteps[inspectorNodeIdx] = inspectorText
-    setActiveWorkflow({ ...activeWorkflow, steps: newSteps })
-    showToast("Updated node parameters!")
+    const updated = { ...activeWorkflow, steps: newSteps }
+    setActiveWorkflow(updated)
+    // Also persist the full workflow to IndexedDB immediately
+    await dbSaveWorkflow(updated)
+    showToast("Node saved & workflow synced to DB!")
   }
 
   // Auto Translate helper
@@ -994,14 +997,27 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                           </h4>
                         </div>
 
-                        {/* Delete Node Button */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteStep(idx); }}
-                          className="p-1 rounded text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
-                          title="Delete Node"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {/* Save Workflow Button on Node */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleSaveWorkflow()
+                            }}
+                            className="p-1 rounded text-slate-600 hover:text-emerald-400 hover:bg-emerald-500/10 cursor-pointer"
+                            title="Save workflow"
+                          >
+                            <CheckCircle className="h-3 w-3" />
+                          </button>
+                          {/* Delete Node Button */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteStep(idx); }}
+                            className="p-1 rounded text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                            title="Delete Node"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       </div>
 
                       <p className="text-[10px] font-mono text-slate-400 bg-slate-950 p-1.5 rounded-lg border border-slate-800/80 truncate mt-2">
@@ -1086,16 +1102,16 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                     variant="outline"
                     size="sm"
                     onClick={() => setInspectorNodeIdx(null)}
-                    className="w-1/2 text-xs bg-slate-950 border-slate-800 text-slate-300 cursor-pointer"
+                    className="w-1/3 text-xs bg-slate-950 border-slate-800 text-slate-300 cursor-pointer"
                   >
                     Close
                   </Button>
                   <Button
                     size="sm"
                     onClick={handleSaveInspector}
-                    className="w-1/2 text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 cursor-pointer"
+                    className="w-2/3 text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    Save Node
+                    <CheckCircle className="h-3.5 w-3.5" /> Save Node &amp; Workflow
                   </Button>
                 </div>
               </div>
