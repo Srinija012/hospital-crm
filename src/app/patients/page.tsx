@@ -298,13 +298,21 @@ function PatientsRegistryContent() {
         setRecordDoc(docs[0].name)
       }
 
-      // Sync active patient drawer
+      // Sync active patient drawer — fetch fresh list directly from DB
+      // so we never use the stale closure-captured patients array
+      const freshPatients = await dbGetPatients()
       if (activePatient) {
-        const match = patients.find(p => p.id === activePatient.id)
-        if (match) setActivePatient(match)
+        const match = freshPatients.find(p => p.id === activePatient.id)
+        if (match) {
+          // Patient still exists — refresh drawer data
+          setActivePatient(match)
+        } else {
+          // Patient was deleted — close drawer immediately
+          setActivePatient(null)
+        }
       } else if (patientIdQuery) {
         // Auto open drawer from search parameter query
-        const match = patients.find(p => p.id === patientIdQuery)
+        const match = freshPatients.find(p => p.id === patientIdQuery)
         if (match) {
           setActivePatient(match)
           setDrawerTab("overview")
@@ -317,7 +325,7 @@ function PatientsRegistryContent() {
 
   React.useEffect(() => {
     loadAllData()
-  }, [patientIdQuery, activePatient?.id])
+  }, [patientIdQuery])
 
   React.useEffect(() => {
     const regPhone = searchParams?.get("registerPhone")
@@ -1782,12 +1790,14 @@ function PatientsRegistryContent() {
                 disabled={isDeletingPatient}
                 onClick={async () => {
                   if (!activePatient) return
+                  const deletedName = activePatient.name
                   setIsDeletingPatient(true)
                   try {
-                    await dbMovePatientToTrash(activePatient.id)
+                    // Close drawer FIRST before any async work
                     setShowDeleteConfirmModal(false)
                     setActivePatient(null)
-                    triggerNotice(`"${activePatient.name}" moved to Trash. Will be permanently deleted in 30 days.`)
+                    await dbMovePatientToTrash(activePatient.id)
+                    triggerNotice(`"${deletedName}" moved to Trash. Will be permanently deleted in 30 days.`)
                     loadAllData()
                   } catch (err: any) {
                     triggerNotice(`Error: ${err?.message || 'Failed to delete patient'}`)
