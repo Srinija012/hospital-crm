@@ -41,8 +41,9 @@ import {
   X,
   ArrowDown,
   ChevronLeft,
-  Move,
-  Wand2
+  Wand2,
+  Navigation,
+  Compass
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -210,9 +211,9 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
   const [logs, setLogs] = React.useState<WorkflowExecutionLog[]>([])
   const [activeTab, setActiveTab] = React.useState("builder")
 
-  // 2D CANVAS STATE (n8n 2D Node Positioning Architecture)
+  // 2D CANVAS STABLE STATE
   const [nodePositions, setNodePositions] = React.useState<Record<number | string, NodePosition>>({})
-  const [canvasPan, setCanvasPan] = React.useState<NodePosition>({ x: 40, y: 120 })
+  const [canvasPan, setCanvasPan] = React.useState<NodePosition>({ x: 60, y: 140 })
   const [zoomLevel, setZoomLevel] = React.useState<number>(100)
   const [isPanning, setIsPanning] = React.useState<boolean>(false)
   const [panStart, setPanStart] = React.useState<NodePosition>({ x: 0, y: 0 })
@@ -283,6 +284,17 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     setNodePositions(newPos)
   }
 
+  // CENTER CANVAS VIEWPORT DIRECTLY ON A SPECIFIC NODE STEP
+  const centerOnNode = (id: number | string) => {
+    const pos = nodePositions[id] || { x: 50, y: 220 }
+    // Center calculation: move canvas Pan so that pos is near the center left
+    let targetX = 60
+    if (typeof id === 'number') {
+      targetX = -(pos.x - 300)
+    }
+    setCanvasPan({ x: targetX, y: 140 })
+  }
+
   // Sync 2D positions whenever workflow changes
   React.useEffect(() => {
     if (activeWorkflow) {
@@ -336,7 +348,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     showToast(`Loaded Blueprint: "${bp.name}"`)
   }
 
-  // 2D CANVAS PANNING HANDLERS
+  // STABLE 2D CANVAS PANNING & DRAGGING HANDLERS
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.n8n-node-card')) return
     setIsPanning(true)
@@ -347,9 +359,8 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     if (isPanning) {
       setCanvasPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
     } else if (draggingNodeId !== null) {
-      const scale = zoomLevel / 100
-      const newX = (e.clientX - canvasPan.x) / scale - dragOffset.x
-      const newY = (e.clientY - canvasPan.y) / scale - dragOffset.y
+      const newX = e.clientX - dragOffset.x
+      const newY = e.clientY - dragOffset.y
       setNodePositions(prev => ({ ...prev, [draggingNodeId]: { x: newX, y: newY } }))
     }
   }
@@ -362,12 +373,9 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
   // NODE 2D DRAGGING HANDLERS
   const handleNodeMouseDown = (e: React.MouseEvent, id: number | string) => {
     e.stopPropagation()
-    const scale = zoomLevel / 100
     const pos = nodePositions[id] || { x: 100, y: 100 }
-    const clickX = (e.clientX - canvasPan.x) / scale
-    const clickY = (e.clientY - canvasPan.y) / scale
     setDraggingNodeId(id)
-    setDragOffset({ x: clickX - pos.x, y: clickY - pos.y })
+    setDragOffset({ x: e.clientX - pos.x, y: e.clientY - pos.y })
   }
 
   // ADD NODE FROM (+) BUTTON OR DRAG-DROP
@@ -576,7 +584,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               className="h-8 text-xs font-bold bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 cursor-pointer gap-1.5"
               title="Auto-Align Nodes in 2D Horizontal Flow"
             >
-              <Wand2 className="h-3.5 w-3.5 text-amber-400" /> Auto-Align 2D
+              <Wand2 className="h-3.5 w-3.5 text-amber-400" /> Auto-Align
             </Button>
 
             {/* Status Toggle */}
@@ -623,6 +631,39 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
           </div>
         )}
       </header>
+
+      {/* STICKY HORIZONTAL STEP NODE NAVIGATOR BAR */}
+      {activeTab === "builder" && activeWorkflow && (
+        <div className="h-10 bg-slate-900 border-b border-slate-800 px-4 flex items-center gap-2 text-xs overflow-x-auto z-20 shrink-0">
+          <span className="text-[10px] font-extrabold uppercase text-slate-400 flex items-center gap-1 shrink-0">
+            <Compass className="h-3.5 w-3.5 text-emerald-400" /> Jump to Step:
+          </span>
+
+          <button
+            onClick={() => centerOnNode("trigger")}
+            className="px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold hover:bg-emerald-500/30 transition-colors shrink-0 cursor-pointer flex items-center gap-1"
+          >
+            ⚡ Start Trigger
+          </button>
+
+          {activeWorkflow.steps.map((st, idx) => (
+            <React.Fragment key={idx}>
+              <ChevronRight className="h-3 w-3 text-slate-600 shrink-0" />
+              <button
+                onClick={() => centerOnNode(idx)}
+                className={`px-2.5 py-1 rounded-md font-bold text-[11px] transition-colors shrink-0 cursor-pointer flex items-center gap-1 ${
+                  inspectorNodeIdx === idx
+                    ? "bg-emerald-500 text-slate-950 shadow-md"
+                    : "bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800"
+                }`}
+              >
+                <span className="text-[9px] font-mono text-slate-400">#{idx + 1}</span>
+                <span className="truncate max-w-[130px]">{st.split(":")[0]}</span>
+              </button>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
 
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -726,10 +767,10 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 className="absolute inset-0 bg-[radial-gradient(#334155_1.2px,transparent_1.2px)] [background-size:24px_24px] opacity-40 pointer-events-none"
               />
 
-              {/* FLOATING ZOOM & CANVAS CONTROLS (BOTTOM LEFT) */}
+              {/* FLOATING ZOOM CONTROLS (BOTTOM LEFT) */}
               <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 backdrop-blur-md p-1.5 rounded-xl shadow-2xl">
                 <button
-                  onClick={() => setZoomLevel(prev => Math.max(40, prev - 15))}
+                  onClick={() => setZoomLevel(prev => Math.max(70, prev - 15))}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Zoom Out"
                 >
@@ -737,14 +778,14 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 </button>
                 <span className="text-[10px] font-mono font-bold text-slate-300 px-1">{zoomLevel}%</span>
                 <button
-                  onClick={() => setZoomLevel(prev => Math.min(160, prev + 15))}
+                  onClick={() => setZoomLevel(prev => Math.min(130, prev + 15))}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Zoom In"
                 >
                   <ZoomIn className="h-3.5 w-3.5" />
                 </button>
                 <button
-                  onClick={() => { setZoomLevel(100); setCanvasPan({ x: 40, y: 120 }); }}
+                  onClick={() => { setZoomLevel(100); setCanvasPan({ x: 60, y: 140 }); }}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Reset Center Canvas View"
                 >
@@ -752,13 +793,13 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 </button>
               </div>
 
-              {/* 2D CANVAS CONTAINER TRANSFORM LAYER */}
+              {/* 2D CANVAS CONTAINER LAYER */}
               <div
                 style={{
                   transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${zoomLevel / 100})`,
                   transformOrigin: '0 0'
                 }}
-                className="absolute inset-0 pointer-events-none"
+                className="absolute inset-0 pointer-events-none transition-transform duration-100"
               >
                 
                 {/* SVG LAYER FOR CUBIC BEZIER VECTOR CURVES */}
@@ -838,7 +879,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                       style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
                       onMouseDown={(e) => handleNodeMouseDown(e, idx)}
                       onClick={(e) => { e.stopPropagation(); handleSelectNodeForInspector(idx); }}
-                      className={`absolute w-[220px] p-3 rounded-2xl bg-slate-900 border transition-all pointer-events-auto cursor-grab active:cursor-grabbing z-10 shadow-xl group hover:shadow-2xl ${
+                      className={`n8n-node-card absolute w-[220px] p-3 rounded-2xl bg-slate-900 border transition-all pointer-events-auto cursor-grab active:cursor-grabbing z-10 shadow-xl group hover:shadow-2xl ${
                         isSelected
                           ? "border-emerald-400 ring-2 ring-emerald-500/30 shadow-emerald-500/20"
                           : "border-slate-800 hover:border-slate-700"
