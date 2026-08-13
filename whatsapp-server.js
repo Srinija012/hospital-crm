@@ -62,6 +62,10 @@ app.use(cors());
 app.use(express.json());
 app.use('/media', express.static(mediaDir));
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 const logger = pino({ level: 'silent' });
 const sessionDir = path.join(__dirname, 'whatsapp-session');
 const scheduledFile = path.join(__dirname, 'scheduled-messages.json');
@@ -1054,8 +1058,8 @@ setInterval(async () => {
 }, 10000); // Check every 10 seconds
 
 // Start Express + WhatsApp Connection
-app.listen(PORT, () => {
-  console.log(`WhatsApp CRM API Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`WhatsApp CRM API Server running on port ${PORT}`);
   startWhatsApp();
 });
 

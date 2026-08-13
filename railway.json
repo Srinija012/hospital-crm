@@ -5,8 +5,8 @@
   },
   "deploy": {
     "startCommand": "node whatsapp-server.js",
-    "healthcheckPath": "/api/sync-state",
-    "healthcheckTimeout": 30,
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
   }
