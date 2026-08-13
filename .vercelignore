@@ -1,0 +1,8 @@
+node_modules
+.git
+whatsapp-session
+whatsapp-media
+*.log
+.DS_Store
+.env.local
+.env
