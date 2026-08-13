@@ -73,8 +73,10 @@ const TEMPLATE_DATABASE: Record<string, Record<string, string>> = {
 export default function WhatsAppAutomation() {
   const [activeTab, setActiveTab] = React.useState("templates")
   const [selectedTemplateKey, setSelectedTemplateKey] = React.useState("welcome")
-  const [activeLang, setActiveLang] = React.useState("English")
-  const [templateText, setTemplateText] = React.useState("")
+  const [activeLang, setActiveLang] = React.useState("English")   // Editing language
+  const [previewLang, setPreviewLang] = React.useState("English")  // Preview-only language (independent)
+  const [templateText, setTemplateText] = React.useState("")        // Textarea content for activeLang
+  const [previewText, setPreviewText] = React.useState("")          // Content for live preview panel
   const [isTranslatingAll, setIsTranslatingAll] = React.useState(false)
   const [successMsg, setSuccessMsg] = React.useState("")
 
@@ -135,6 +137,7 @@ export default function WhatsAppAutomation() {
     }
   }
 
+  // Load the EDITING template (for the textarea) whenever editing language or event changes
   React.useEffect(() => {
     const loadTemplate = async () => {
       const text = await dbGetWhatsAppTemplate(selectedTemplateKey, activeLang)
@@ -142,6 +145,15 @@ export default function WhatsAppAutomation() {
     }
     loadTemplate()
   }, [selectedTemplateKey, activeLang])
+
+  // Load the PREVIEW template (for the phone mockup) independently from the editing template
+  React.useEffect(() => {
+    const loadPreviewTemplate = async () => {
+      const text = await dbGetWhatsAppTemplate(selectedTemplateKey, previewLang)
+      setPreviewText(text || "")
+    }
+    loadPreviewTemplate()
+  }, [selectedTemplateKey, previewLang])
 
   // Core translate-all helper: translates sourceText into all 6 languages and saves them
   const translateAndSaveAll = async (templateKey: string, sourceText: string, sourceLang: string) => {
@@ -177,7 +189,6 @@ export default function WhatsAppAutomation() {
     await dbSaveWhatsAppTemplate(selectedTemplateKey, activeLang, templateText)
 
     // If editing English, auto-translate to all other languages immediately
-    // so every patient language always gets the user's custom message
     let results: string[] = []
     if (activeLang === "English") {
       results = await translateAndSaveAll(selectedTemplateKey, templateText, "English")
@@ -186,20 +197,25 @@ export default function WhatsAppAutomation() {
       setSuccessMsg("Template saved successfully!")
     }
 
-    // Refresh preview textarea so switching languages shows updated translations
-    const refreshed = await dbGetWhatsAppTemplate(selectedTemplateKey, activeLang)
-    setTemplateText(refreshed || templateText)
+    // Refresh the Live Preview panel to show the latest translation
+    const freshPreview = await dbGetWhatsAppTemplate(selectedTemplateKey, previewLang)
+    setPreviewText(freshPreview || "")
 
     setIsTranslatingAll(false)
     setTimeout(() => setSuccessMsg(""), 5000)
   }
 
-  // "Save & Auto-Translate All" button — same as Save but always translates even for non-English
+  // "Save & Auto-Translate All" button — always translates even for non-English
   const handleSaveAndTranslateAll = async () => {
     if (!templateText.trim()) return
     setIsTranslatingAll(true)
     await dbSaveWhatsAppTemplate(selectedTemplateKey, activeLang, templateText)
     const results = await translateAndSaveAll(selectedTemplateKey, templateText, activeLang)
+
+    // Refresh the Live Preview panel
+    const freshPreview = await dbGetWhatsAppTemplate(selectedTemplateKey, previewLang)
+    setPreviewText(freshPreview || "")
+
     setIsTranslatingAll(false)
     setSuccessMsg(`Saved in ${activeLang} + auto-translated to: ${results.join(", ") || "(none)"}`)
     setTimeout(() => setSuccessMsg(""), 5000)
@@ -248,9 +264,9 @@ export default function WhatsAppAutomation() {
     setTimeout(() => setSuccessMsg(""), 3000)
   }
 
-  // Generate resolved preview text with variables replaced
+  // Generate resolved preview text with variables replaced (uses previewText, not templateText)
   const getPreviewContent = () => {
-    let text = templateText
+    let text = previewText || templateText
     Object.entries(previewData).forEach(([placeholder, val]) => {
       text = text.replaceAll(placeholder, val)
     })
@@ -304,17 +320,28 @@ export default function WhatsAppAutomation() {
                       </Select>
                     </div>
 
+                    {/* Editing Language selector */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="edit-lang-select" className="flex items-center gap-1">
+                        <Languages className="h-3.5 w-3.5 text-primary" /> Editing Language
+                      </Label>
+                      <Select
+                        id="edit-lang-select"
+                        value={activeLang}
+                        onChange={(e) => setActiveLang(e.target.value)}
+                      >
+                        {["English","Telugu","Hindi","Tamil","Kannada","Malayalam","Marathi"].map(lang => (
+                          <option key={lang} value={lang}>{lang}</option>
+                        ))}
+                      </Select>
+                      <p className="text-[10px] text-muted-foreground">Type your template in this language. Saving English auto-translates all others.</p>
+                    </div>
                     {/* Editing textarea */}
                     <div className="space-y-1.5">
-                      <div className="flex justify-between items-center">
-                        <Label htmlFor="temp-content">Edit Template String</Label>
-                        <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1">
-                          <Languages className="h-3.5 w-3.5 text-primary" /> Editing Language: {activeLang}
-                        </span>
-                      </div>
+                      <Label htmlFor="temp-content">Template Message</Label>
                       <Textarea
                         id="temp-content"
-                        rows={4}
+                        rows={5}
                         value={templateText}
                         onChange={(e) => setTemplateText(e.target.value)}
                         className="text-xs font-medium font-sans leading-relaxed"
@@ -355,8 +382,9 @@ export default function WhatsAppAutomation() {
                         <Languages className="h-3.5 w-3.5 text-primary" />
                         {isTranslatingAll ? "Translating..." : "Save & Auto-Translate All"}
                       </Button>
-                      <Button type="submit" size="sm" className="cursor-pointer">
-                        <Save className="h-4 w-4 mr-1.5" /> Save Template
+                      <Button type="submit" size="sm" className="cursor-pointer" disabled={isTranslatingAll}>
+                        <Save className="h-4 w-4 mr-1.5" />
+                        {isTranslatingAll && activeLang === "English" ? "Saving & Translating..." : "Save Template"}
                       </Button>
                     </div>
                   </CardContent>
@@ -646,15 +674,16 @@ export default function WhatsAppAutomation() {
                 <CardDescription className="text-xxs">Simulation representing patient mobile notification view.</CardDescription>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
-                {/* Language selectors */}
+                {/* Language selectors — only controls PREVIEW, not editing language */}
                 <div className="flex flex-wrap gap-1.5">
+                  <p className="w-full text-[9px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Preview Language</p>
                   {Object.keys(TEMPLATE_DATABASE[selectedTemplateKey]).map(lang => (
                     <Button
                       key={lang}
                       size="sm"
-                      variant={activeLang === lang ? "default" : "outline"}
+                      variant={previewLang === lang ? "default" : "outline"}
                       className="h-7 text-[10px] px-2.5 cursor-pointer"
-                      onClick={() => setActiveLang(lang)}
+                      onClick={() => setPreviewLang(lang)}
                     >
                       {lang}
                     </Button>
