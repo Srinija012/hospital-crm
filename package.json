@@ -6,8 +6,9 @@
     "dev": "vite",
     "dev:all": "concurrently \"npm run dev\" \"node whatsapp-server.js\"",
     "build": "tsc && vite build",
-    "start": "vite preview",
-    "start:all": "concurrently \"npm run start\" \"node whatsapp-server.js\"",
+    "start": "node whatsapp-server.js",
+    "preview": "vite preview",
+    "start:all": "concurrently \"npm run preview\" \"node whatsapp-server.js\"",
     "lint": "eslint"
   },
   "dependencies": {
