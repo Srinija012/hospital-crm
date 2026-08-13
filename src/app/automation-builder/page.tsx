@@ -40,7 +40,9 @@ import {
   RefreshCw,
   X,
   ArrowDown,
-  ChevronLeft
+  ChevronLeft,
+  Move,
+  Wand2
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -70,7 +72,7 @@ import {
   Patient
 } from "@/lib/db"
 
-// ─── n8n Style Palette Node Definitions ─────────────────────────────────────
+// ─── n8n Node Definitions & Data Models ───────────────────────────────────────
 
 export interface PaletteNode {
   id: string
@@ -80,6 +82,11 @@ export interface PaletteNode {
   iconName: string
   defaultStep: string
   color: string
+}
+
+export interface NodePosition {
+  x: number
+  y: number
 }
 
 const EVENT_TRIGGERS = [
@@ -176,8 +183,6 @@ const ENTERPRISE_BLUEPRINTS = [
   }
 ]
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function getNodeIcon(iconName: string) {
   switch (iconName) {
     case "clock": return <Clock className="h-3.5 w-3.5 text-white" />
@@ -197,17 +202,6 @@ function getNodeIcon(iconName: string) {
   }
 }
 
-function getNodeCategoryBadgeColor(category: string) {
-  switch (category) {
-    case "Triggers": return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-    case "Delays": return "bg-amber-500/20 text-amber-400 border-amber-500/30"
-    case "Conditions": return "bg-indigo-500/20 text-indigo-400 border-indigo-500/30"
-    case "Messaging": return "bg-teal-500/20 text-teal-400 border-teal-500/30"
-    case "Operations": return "bg-orange-500/20 text-orange-400 border-orange-500/30"
-    default: return "bg-slate-500/20 text-slate-400 border-slate-500/30"
-  }
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AutomationBuilderPage({ embedded }: { embedded?: boolean }) {
@@ -215,24 +209,30 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
   const [activeWorkflow, setActiveWorkflow] = React.useState<AutomationWorkflow | null>(null)
   const [logs, setLogs] = React.useState<WorkflowExecutionLog[]>([])
   const [activeTab, setActiveTab] = React.useState("builder")
-  
-  // n8n Layout Mode & UI States
-  const [layoutMode, setLayoutMode] = React.useState<'graph' | 'tree'>('graph')
+
+  // 2D CANVAS STATE (n8n 2D Node Positioning Architecture)
+  const [nodePositions, setNodePositions] = React.useState<Record<number | string, NodePosition>>({})
+  const [canvasPan, setCanvasPan] = React.useState<NodePosition>({ x: 40, y: 120 })
   const [zoomLevel, setZoomLevel] = React.useState<number>(100)
+  const [isPanning, setIsPanning] = React.useState<boolean>(false)
+  const [panStart, setPanStart] = React.useState<NodePosition>({ x: 0, y: 0 })
+  
+  // Dragging node on 2D canvas
+  const [draggingNodeId, setDraggingNodeId] = React.useState<number | string | null>(null)
+  const [dragOffset, setDragOffset] = React.useState<NodePosition>({ x: 0, y: 0 })
+
+  // UI Drawer & Modal States
   const [sidebarOpen, setSidebarOpen] = React.useState<boolean>(true)
   const [inspectorNodeIdx, setInspectorNodeIdx] = React.useState<number | null>(null)
-
-  // Palette Filter
-  const [paletteFilter, setPaletteFilter] = React.useState("")
-  const [activeCategoryTab, setActiveCategoryTab] = React.useState<string>("All")
-
-  // Drag & drop dropzone states
-  const [draggedNode, setDraggedNode] = React.useState<PaletteNode | null>(null)
-  const [dragOverIndex, setDragOverIndex] = React.useState<number | null>(null)
-
-  // Step Inspector Drawer Text Edit State
   const [inspectorText, setInspectorText] = React.useState("")
   const [isTranslating, setIsTranslating] = React.useState(false)
+
+  // Floating Node Picker (+) Modal
+  const [nodePickerInsertIndex, setNodePickerInsertIndex] = React.useState<number | null>(null)
+
+  // Palette Search Filter
+  const [paletteFilter, setPaletteFilter] = React.useState("")
+  const [activeCategoryTab, setActiveCategoryTab] = React.useState<string>("All")
 
   // Dry-Run Sandbox Tester Modal
   const [showSandboxModal, setShowSandboxModal] = React.useState(false)
@@ -249,12 +249,13 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     setTimeout(() => setToastMsg(null), 3000)
   }
 
-  // Load Workflows and Patients
+  // Load Initial Data
   const loadData = async () => {
     const wfs = await dbGetWorkflows()
     setWorkflows(wfs)
     if (wfs.length > 0 && !activeWorkflow) {
       setActiveWorkflow(wfs[0])
+      autoAlign2DPositions(wfs[0].steps.length)
     }
     const lgs = await dbGetWorkflowLogs()
     setLogs(lgs)
@@ -268,6 +269,26 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
   React.useEffect(() => {
     loadData()
   }, [])
+
+  // Auto-Align Nodes in 2D Horizontal Grid (n8n Left-to-Right Flow)
+  const autoAlign2DPositions = (stepsCount: number) => {
+    const newPos: Record<number | string, NodePosition> = {}
+    // Trigger Start Node at (X: 50, Y: 220)
+    newPos["trigger"] = { x: 50, y: 220 }
+    
+    // Position steps horizontally from left to right: X = 320, 590, 860, 1130...
+    for (let i = 0; i < stepsCount; i++) {
+      newPos[i] = { x: 320 + i * 270, y: 220 }
+    }
+    setNodePositions(newPos)
+  }
+
+  // Sync 2D positions whenever workflow changes
+  React.useEffect(() => {
+    if (activeWorkflow) {
+      autoAlign2DPositions(activeWorkflow.steps.length)
+    }
+  }, [activeWorkflow?.id, activeWorkflow?.steps.length])
 
   // Create New Workflow
   const handleCreateNewWorkflow = async () => {
@@ -286,7 +307,8 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     await dbSaveWorkflow(newWf)
     await loadData()
     setActiveWorkflow(newWf)
-    showToast("Created new n8n-style workflow canvas!")
+    autoAlign2DPositions(newWf.steps.length)
+    showToast("Created 2D n8n visual graph canvas!")
   }
 
   // Save current Active Workflow
@@ -294,7 +316,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     if (!activeWorkflow) return
     await dbSaveWorkflow(activeWorkflow)
     await loadData()
-    showToast("Workflow node graph saved!")
+    showToast("Saved 2D visual workflow graph!")
   }
 
   // Load Preset Blueprint
@@ -310,54 +332,56 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     await dbSaveWorkflow(newWf)
     await loadData()
     setActiveWorkflow(newWf)
+    autoAlign2DPositions(newWf.steps.length)
     showToast(`Loaded Blueprint: "${bp.name}"`)
   }
 
-  // Drag and Drop Logic
-  const handleDragStart = (e: React.DragEvent, node: PaletteNode) => {
-    setDraggedNode(node)
-    e.dataTransfer.setData("application/json", JSON.stringify(node))
-    e.dataTransfer.effectAllowed = "copy"
+  // 2D CANVAS PANNING HANDLERS
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.n8n-node-card')) return
+    setIsPanning(true)
+    setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y })
   }
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = "copy"
-    setDragOverIndex(index)
-  }
-
-  const handleDropNode = (e: React.DragEvent, insertIndex: number) => {
-    e.preventDefault()
-    setDragOverIndex(null)
-    if (!activeWorkflow) return
-
-    let nodeToInsert = draggedNode
-    if (!nodeToInsert) {
-      try {
-        const raw = e.dataTransfer.getData("application/json")
-        if (raw) nodeToInsert = JSON.parse(raw)
-      } catch (err) {}
+  const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (isPanning) {
+      setCanvasPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y })
+    } else if (draggingNodeId !== null) {
+      const scale = zoomLevel / 100
+      const newX = (e.clientX - canvasPan.x) / scale - dragOffset.x
+      const newY = (e.clientY - canvasPan.y) / scale - dragOffset.y
+      setNodePositions(prev => ({ ...prev, [draggingNodeId]: { x: newX, y: newY } }))
     }
-    if (!nodeToInsert) return
+  }
 
+  const handleCanvasMouseUp = () => {
+    setIsPanning(false)
+    setDraggingNodeId(null)
+  }
+
+  // NODE 2D DRAGGING HANDLERS
+  const handleNodeMouseDown = (e: React.MouseEvent, id: number | string) => {
+    e.stopPropagation()
+    const scale = zoomLevel / 100
+    const pos = nodePositions[id] || { x: 100, y: 100 }
+    const clickX = (e.clientX - canvasPan.x) / scale
+    const clickY = (e.clientY - canvasPan.y) / scale
+    setDraggingNodeId(id)
+    setDragOffset({ x: clickX - pos.x, y: clickY - pos.y })
+  }
+
+  // ADD NODE FROM (+) BUTTON OR DRAG-DROP
+  const handleInsertNodeStep = (defaultStepText: string, insertIndex?: number) => {
+    if (!activeWorkflow) return
+    const targetIdx = insertIndex !== undefined ? insertIndex : activeWorkflow.steps.length
     const newSteps = [...activeWorkflow.steps]
-    newSteps.splice(insertIndex, 0, nodeToInsert.defaultStep)
+    newSteps.splice(targetIdx, 0, defaultStepText)
     setActiveWorkflow({ ...activeWorkflow, steps: newSteps })
-    setDraggedNode(null)
-    showToast(`Appended node: ${nodeToInsert.label}`)
+    setNodePickerInsertIndex(null)
+    showToast(`Appended node step into 2D graph!`)
   }
 
   // Step Manipulation
-  const handleMoveStep = (fromIdx: number, direction: 'up' | 'down') => {
-    if (!activeWorkflow) return
-    const toIdx = direction === 'up' ? fromIdx - 1 : fromIdx + 1
-    if (toIdx < 0 || toIdx >= activeWorkflow.steps.length) return
-    const newSteps = [...activeWorkflow.steps]
-    const [moved] = newSteps.splice(fromIdx, 1)
-    newSteps.splice(toIdx, 0, moved)
-    setActiveWorkflow({ ...activeWorkflow, steps: newSteps })
-  }
-
   const handleDeleteStep = (idx: number) => {
     if (!activeWorkflow) return
     const newSteps = [...activeWorkflow.steps]
@@ -373,7 +397,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     setActiveWorkflow({ ...activeWorkflow, steps: newSteps })
   }
 
-  // Inspector Drawer Node Click
+  // Open Inspector
   const handleSelectNodeForInspector = (idx: number) => {
     if (!activeWorkflow) return
     setInspectorNodeIdx(idx)
@@ -385,10 +409,10 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     const newSteps = [...activeWorkflow.steps]
     newSteps[inspectorNodeIdx] = inspectorText
     setActiveWorkflow({ ...activeWorkflow, steps: newSteps })
-    showToast("Node parameters updated!")
+    showToast("Updated node parameters!")
   }
 
-  // Auto Translate helper inside Step Inspector
+  // Auto Translate helper
   const handleAutoTranslateStep = async (targetLang: string) => {
     if (!inspectorText) return
     setIsTranslating(true)
@@ -408,12 +432,12 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     }
   }
 
-  // Insert dynamic tag chip into text
+  // Insert tag chip
   const handleInsertTag = (tag: string) => {
     setInspectorText(prev => `${prev} ${tag}`)
   }
 
-  // Sandbox Dry-Run Test execution
+  // Sandbox Test
   const handleRunSandboxTest = async () => {
     if (!activeWorkflow || !selectedPatientId) return
     setIsTesting(true)
@@ -443,15 +467,6 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     }
   }
 
-  // Bulk Run Execution
-  const handleRunBulk = async () => {
-    if (!activeWorkflow) return
-    showToast(`Dispatched workflow execution across ${patients.length} patients...`)
-    await dbRunWorkflowInBulk(activeWorkflow.id)
-    await loadData()
-    showToast("Bulk workflow execution complete!")
-  }
-
   // Filter palette nodes
   const filteredPaletteNodes = PALETTE_NODES.filter(node => {
     const matchesFilter = node.label.toLowerCase().includes(paletteFilter.toLowerCase()) || node.desc.toLowerCase().includes(paletteFilter.toLowerCase())
@@ -459,8 +474,19 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
     return matchesFilter && node.category === activeCategoryTab
   })
 
+  // GET 2D SVG CONNECTING PATH (Cubic Bezier Horizontal Curves)
+  const getBezierPath = (p1: NodePosition, p2: NodePosition) => {
+    const x1 = p1.x + 220 // Output handle on right edge of node (width 220px)
+    const y1 = p1.y + 38  // Middle height of node (height 76px)
+    const x2 = p2.x       // Input handle on left edge of node
+    const y2 = p2.y + 38
+
+    const dx = Math.max(60, Math.abs(x2 - x1) * 0.5)
+    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
+  }
+
   return (
-    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none ${embedded ? 'p-0' : ''}`}>
+    <div className={`h-screen w-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden ${embedded ? 'p-0' : ''}`}>
       
       {/* Toast Notification Banner */}
       {toastMsg && (
@@ -470,7 +496,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
         </div>
       )}
 
-      {/* TOP n8n CONTROL BAR */}
+      {/* TOP n8n CONTROL TOOLBAR */}
       <header className="h-14 border-b border-slate-800 bg-slate-900/90 backdrop-blur-md px-4 flex items-center justify-between z-30 shrink-0">
         
         {/* Left: Workflow Selector & Name */}
@@ -487,6 +513,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 if (found) {
                   setActiveWorkflow(found)
                   setInspectorNodeIdx(null)
+                  autoAlign2DPositions(found.steps.length)
                 }
               }}
               className="h-8 rounded-lg border border-slate-700 bg-slate-950 px-2.5 text-xs font-bold text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
@@ -517,7 +544,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               activeTab === "builder" ? "bg-emerald-500 text-slate-950 shadow-md" : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            <LayoutGrid className="h-3.5 w-3.5" /> Canvas Graph
+            <LayoutGrid className="h-3.5 w-3.5" /> 2D Canvas Graph
           </button>
           <button
             onClick={() => setActiveTab("blueprints")}
@@ -541,6 +568,17 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
         {activeWorkflow && (
           <div className="flex items-center gap-2">
             
+            {/* Auto Align 2D Graph */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => autoAlign2DPositions(activeWorkflow.steps.length)}
+              className="h-8 text-xs font-bold bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800 cursor-pointer gap-1.5"
+              title="Auto-Align Nodes in 2D Horizontal Flow"
+            >
+              <Wand2 className="h-3.5 w-3.5 text-amber-400" /> Auto-Align 2D
+            </Button>
+
             {/* Status Toggle */}
             <button
               onClick={() => setActiveWorkflow({ ...activeWorkflow, status: activeWorkflow.status === 'Active' ? 'Paused' : 'Active' })}
@@ -561,7 +599,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               onClick={() => setShowSandboxModal(true)}
               className="h-8 text-xs font-bold bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 cursor-pointer gap-1.5"
             >
-              <Play className="h-3.5 w-3.5 text-indigo-400" /> Test Node Graph
+              <Play className="h-3.5 w-3.5 text-indigo-400" /> Test Graph ▶
             </Button>
 
             {/* Save Workflow */}
@@ -589,17 +627,16 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
       {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex overflow-hidden relative">
 
-        {/* TAB 1: n8n VISUAL CANVAS GRAPH */}
+        {/* TAB 1: 2D n8n INFINITE CANVAS GRAPH */}
         {activeTab === "builder" && activeWorkflow && (
           <>
             {/* COLLAPSIBLE LEFT PALETTE SIDEBAR */}
-            <div className={`transition-all duration-300 border-r border-slate-800 bg-slate-900/80 flex flex-col shrink-0 z-20 ${sidebarOpen ? 'w-80' : 'w-12'}`}>
+            <div className={`transition-all duration-300 border-r border-slate-800 bg-slate-900/90 flex flex-col shrink-0 z-20 ${sidebarOpen ? 'w-72' : 'w-12'}`}>
               
-              {/* Sidebar Header */}
               <div className="p-3 border-b border-slate-800 flex items-center justify-between">
                 {sidebarOpen ? (
                   <span className="text-xs font-extrabold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                    <Layers className="h-4 w-4 text-emerald-400" /> Node Library Palette
+                    <Layers className="h-4 w-4 text-emerald-400" /> Palette Library
                   </span>
                 ) : (
                   <Layers className="h-4 w-4 text-emerald-400 mx-auto" />
@@ -618,7 +655,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
                     <Input
-                      placeholder="Filter nodes..."
+                      placeholder="Search nodes..."
                       value={paletteFilter}
                       onChange={(e) => setPaletteFilter(e.target.value)}
                       className="pl-8 text-xs h-8 bg-slate-950 border-slate-800 text-slate-200"
@@ -647,9 +684,8 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                     {filteredPaletteNodes.map(node => (
                       <div
                         key={node.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, node)}
-                        className="p-2.5 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-emerald-500/50 hover:bg-slate-800/50 transition-all cursor-grab active:cursor-grabbing group shadow-sm"
+                        onClick={() => handleInsertNodeStep(node.defaultStep)}
+                        className="p-2.5 rounded-xl border border-slate-800 bg-slate-950/90 hover:border-emerald-500/50 hover:bg-slate-800/50 transition-all cursor-pointer group shadow-sm"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
@@ -665,7 +701,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                               </p>
                             </div>
                           </div>
-                          <GripVertical className="h-3.5 w-3.5 text-slate-600 group-hover:text-emerald-400 shrink-0" />
+                          <Plus className="h-3.5 w-3.5 text-slate-600 group-hover:text-emerald-400 shrink-0" />
                         </div>
                       </div>
                     ))}
@@ -674,16 +710,26 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               )}
             </div>
 
-            {/* CENTER GRAPH CANVAS */}
-            <div className="flex-1 bg-slate-950 relative overflow-hidden flex flex-col justify-between">
+            {/* CENTER 2D CANVAS GRAPH WITH SVG BEZIER CURVED LINES */}
+            <div
+              onMouseDown={handleCanvasMouseDown}
+              onMouseMove={handleCanvasMouseMove}
+              onMouseUp={handleCanvasMouseUp}
+              className={`flex-1 bg-slate-950 relative overflow-hidden cursor-grab active:cursor-grabbing ${
+                isPanning ? 'cursor-grabbing' : ''
+              }`}
+            >
               
-              {/* CANVAS BACKGROUND GRID DOTS */}
-              <div className="absolute inset-0 bg-[radial-gradient(#334155_1px,transparent_1px)] [background-size:20px_20px] opacity-40 pointer-events-none" />
+              {/* CANVAS BACKGROUND GRID DOT MESH */}
+              <div
+                style={{ backgroundPosition: `${canvasPan.x}px ${canvasPan.y}px` }}
+                className="absolute inset-0 bg-[radial-gradient(#334155_1.2px,transparent_1.2px)] [background-size:24px_24px] opacity-40 pointer-events-none"
+              />
 
-              {/* CANVAS ZOOM & LAYOUT CONTROLS (FLOATING BOTTOM LEFT) */}
-              <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 backdrop-blur-md p-1.5 rounded-xl shadow-xl">
+              {/* FLOATING ZOOM & CANVAS CONTROLS (BOTTOM LEFT) */}
+              <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 backdrop-blur-md p-1.5 rounded-xl shadow-2xl">
                 <button
-                  onClick={() => setZoomLevel(prev => Math.max(50, prev - 15))}
+                  onClick={() => setZoomLevel(prev => Math.max(40, prev - 15))}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Zoom Out"
                 >
@@ -691,177 +737,158 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 </button>
                 <span className="text-[10px] font-mono font-bold text-slate-300 px-1">{zoomLevel}%</span>
                 <button
-                  onClick={() => setZoomLevel(prev => Math.min(150, prev + 15))}
+                  onClick={() => setZoomLevel(prev => Math.min(160, prev + 15))}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Zoom In"
                 >
                   <ZoomIn className="h-3.5 w-3.5" />
                 </button>
                 <button
-                  onClick={() => setZoomLevel(100)}
+                  onClick={() => { setZoomLevel(100); setCanvasPan({ x: 40, y: 120 }); }}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
-                  title="Reset Zoom"
+                  title="Reset Center Canvas View"
                 >
                   <Maximize2 className="h-3.5 w-3.5" />
                 </button>
               </div>
 
-              {/* GRAPH CANVAS NODE TREE */}
-              <div className="flex-1 overflow-auto p-8 relative z-10 flex flex-col items-center">
+              {/* 2D CANVAS CONTAINER TRANSFORM LAYER */}
+              <div
+                style={{
+                  transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${zoomLevel / 100})`,
+                  transformOrigin: '0 0'
+                }}
+                className="absolute inset-0 pointer-events-none"
+              >
                 
+                {/* SVG LAYER FOR CUBIC BEZIER VECTOR CURVES */}
+                <svg className="absolute inset-0 w-[5000px] h-[5000px] pointer-events-none overflow-visible z-0">
+                  
+                  {/* TRIGGER TO STEP #1 BEZIER LINE */}
+                  {nodePositions["trigger"] && nodePositions[0] && (
+                    <path
+                      d={getBezierPath(nodePositions["trigger"], nodePositions[0])}
+                      stroke="#10b981"
+                      strokeWidth="3"
+                      fill="none"
+                      strokeDasharray="6,4"
+                      className="animate-pulse"
+                    />
+                  )}
+
+                  {/* STEP TO STEP BEZIER LINES */}
+                  {activeWorkflow.steps.map((_, idx) => {
+                    if (idx >= activeWorkflow.steps.length - 1) return null
+                    const p1 = nodePositions[idx] || { x: 320 + idx * 270, y: 220 }
+                    const p2 = nodePositions[idx + 1] || { x: 320 + (idx + 1) * 270, y: 220 }
+                    return (
+                      <path
+                        key={idx}
+                        d={getBezierPath(p1, p2)}
+                        stroke="#10b981"
+                        strokeWidth="3"
+                        fill="none"
+                        strokeDasharray="6,4"
+                      />
+                    )
+                  })}
+                </svg>
+
+                {/* 2D TRIGGER START NODE */}
                 <div
-                  style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-                  className="transition-transform duration-200 space-y-6 w-full max-w-xl"
+                  style={{
+                    left: `${nodePositions["trigger"]?.x || 50}px`,
+                    top: `${nodePositions["trigger"]?.y || 220}px`
+                  }}
+                  onMouseDown={(e) => handleNodeMouseDown(e, "trigger")}
+                  className="absolute w-[220px] p-3 rounded-2xl bg-slate-900 border-2 border-emerald-500 shadow-2xl shadow-emerald-500/10 pointer-events-auto cursor-grab active:cursor-grabbing z-10 group"
                 >
-                  {/* TRIGGER START NODE */}
-                  <div className="p-4 rounded-2xl bg-slate-900 border-2 border-emerald-500/60 shadow-xl shadow-emerald-500/5 relative group">
-                    
-                    {/* Output Handle Dot */}
-                    <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 h-5 w-5 rounded-full bg-slate-900 border-2 border-emerald-400 flex items-center justify-center z-10">
-                      <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-emerald-500 flex items-center justify-center font-bold text-slate-950 shadow-md shadow-emerald-500/20">
-                          ⚡
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-400">
-                            Workflow Trigger Node
-                          </span>
-                          <h3 className="text-sm font-extrabold text-slate-100">
-                            {activeWorkflow.trigger}
-                          </h3>
-                        </div>
-                      </div>
-                      <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/40 text-[9px] font-bold">
-                        TRIGGER
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* DROP ZONE (INDEX 0) */}
+                  {/* Output Handle Dot (Right Edge) */}
                   <div
-                    onDragOver={(e) => handleDragOver(e, 0)}
-                    onDrop={(e) => handleDropNode(e, 0)}
-                    className={`py-2 px-4 rounded-xl border-2 border-dashed transition-all text-center flex items-center justify-center gap-2 cursor-pointer ${
-                      dragOverIndex === 0
-                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 scale-102 shadow-lg"
-                        : "border-slate-800 hover:border-emerald-500/50 bg-slate-900/30 text-slate-500 hover:text-slate-300"
-                    }`}
+                    onClick={(e) => { e.stopPropagation(); setNodePickerInsertIndex(0); }}
+                    className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-slate-900 border-2 border-emerald-400 flex items-center justify-center cursor-pointer hover:scale-125 hover:bg-emerald-500 hover:text-slate-950 transition-all z-20"
+                    title="Click to add next step node"
                   >
-                    <Plus className="h-3.5 w-3.5 text-emerald-400" />
-                    <span className="text-xs font-bold">Drop node here to insert at step #1</span>
+                    <Plus className="h-3 w-3 text-emerald-400 hover:text-slate-950" />
                   </div>
 
-                  {/* DYNAMIC COMPACT n8n NODE CARDS */}
-                  {activeWorkflow.steps.map((stepText, idx) => (
-                    <React.Fragment key={idx}>
-                      
-                      {/* CONNECTING VECTOR SVG LINE */}
-                      <div className="flex justify-center my-0.5">
-                        <div className="flex flex-col items-center">
-                          <div className="w-0.5 h-6 bg-gradient-to-b from-emerald-500/80 to-slate-700" />
-                          <ArrowDown className="h-4 w-4 text-emerald-400 -mt-1" />
-                        </div>
-                      </div>
-
-                      {/* COMPACT n8n STEP NODE CARD */}
-                      <div
-                        onClick={() => handleSelectNodeForInspector(idx)}
-                        className={`p-3.5 rounded-2xl bg-slate-900 border transition-all cursor-pointer relative shadow-lg group hover:shadow-2xl ${
-                          inspectorNodeIdx === idx
-                            ? "border-emerald-400 shadow-emerald-500/10 ring-2 ring-emerald-500/20"
-                            : "border-slate-800 hover:border-slate-700"
-                        }`}
-                      >
-                        {/* Input Handle Dot */}
-                        <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 h-4 w-4 rounded-full bg-slate-900 border-2 border-emerald-400 flex items-center justify-center" />
-                        
-                        {/* Output Handle Dot */}
-                        <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 h-4 w-4 rounded-full bg-slate-900 border-2 border-slate-600 group-hover:border-emerald-400 flex items-center justify-center" />
-
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <span className="h-6 w-6 rounded-md bg-slate-800 text-slate-300 text-xs font-extrabold flex items-center justify-center shrink-0 border border-slate-700">
-                              #{idx + 1}
-                            </span>
-                            <div className="space-y-1">
-                              <h4 className="text-xs font-bold text-slate-100 group-hover:text-emerald-400 transition-colors">
-                                {stepText.split(":")[0]}
-                              </h4>
-                              <p className="text-[11px] font-mono text-slate-400 bg-slate-950/80 p-2 rounded-lg border border-slate-800/80 break-all">
-                                {stepText}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Quick Controls */}
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleMoveStep(idx, 'up'); }}
-                              disabled={idx === 0}
-                              className="p-1 rounded text-slate-500 hover:text-slate-200 cursor-pointer disabled:opacity-30"
-                            >
-                              <ChevronUp className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleMoveStep(idx, 'down'); }}
-                              disabled={idx === activeWorkflow.steps.length - 1}
-                              className="p-1 rounded text-slate-500 hover:text-slate-200 cursor-pointer disabled:opacity-30"
-                            >
-                              <ChevronDown className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDuplicateStep(idx); }}
-                              className="p-1 rounded text-slate-500 hover:text-slate-200 cursor-pointer"
-                              title="Duplicate Node"
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDeleteStep(idx); }}
-                              className="p-1 rounded text-slate-500 hover:text-rose-400 cursor-pointer"
-                              title="Delete Node"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* INTERMEDIATE DROP ZONE */}
-                      <div
-                        onDragOver={(e) => handleDragOver(e, idx + 1)}
-                        onDrop={(e) => handleDropNode(e, idx + 1)}
-                        className={`py-2 px-4 rounded-xl border-2 border-dashed transition-all text-center flex items-center justify-center gap-2 cursor-pointer ${
-                          dragOverIndex === idx + 1
-                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-400 scale-102 shadow-lg"
-                            : "border-slate-800/60 hover:border-emerald-500/40 bg-slate-950/40 text-slate-600 hover:text-slate-300"
-                        }`}
-                      >
-                        <Plus className="h-3.5 w-3.5 text-emerald-400" />
-                        <span className="text-[10px] font-bold">Drop node to insert at position #{idx + 2}</span>
-                      </div>
-
-                    </React.Fragment>
-                  ))}
-
-                  {/* END TERMINAL NODE */}
-                  <div className="flex justify-center pt-2">
-                    <Badge variant="outline" className="bg-slate-900 text-slate-400 border-slate-800 text-[10px] font-bold uppercase py-1 px-3">
-                      ✓ End Node Sequence
-                    </Badge>
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-500 flex items-center justify-center font-bold text-slate-950 shrink-0">
+                      ⚡
+                    </div>
+                    <div>
+                      <span className="text-[8px] font-extrabold uppercase tracking-wider text-emerald-400 block">
+                        Start Trigger
+                      </span>
+                      <h3 className="text-xs font-bold text-slate-100 truncate">
+                        {activeWorkflow.trigger}
+                      </h3>
+                    </div>
                   </div>
-
                 </div>
+
+                {/* 2D DYNAMIC COMPACT n8n STEP NODES */}
+                {activeWorkflow.steps.map((stepText, idx) => {
+                  const pos = nodePositions[idx] || { x: 320 + idx * 270, y: 220 }
+                  const isSelected = inspectorNodeIdx === idx
+
+                  return (
+                    <div
+                      key={idx}
+                      style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
+                      onMouseDown={(e) => handleNodeMouseDown(e, idx)}
+                      onClick={(e) => { e.stopPropagation(); handleSelectNodeForInspector(idx); }}
+                      className={`absolute w-[220px] p-3 rounded-2xl bg-slate-900 border transition-all pointer-events-auto cursor-grab active:cursor-grabbing z-10 shadow-xl group hover:shadow-2xl ${
+                        isSelected
+                          ? "border-emerald-400 ring-2 ring-emerald-500/30 shadow-emerald-500/20"
+                          : "border-slate-800 hover:border-slate-700"
+                      }`}
+                    >
+                      {/* Input Handle Dot (Left Edge) */}
+                      <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-slate-900 border-2 border-emerald-400 flex items-center justify-center" />
+
+                      {/* Output Handle Dot (Right Edge) */}
+                      <div
+                        onClick={(e) => { e.stopPropagation(); setNodePickerInsertIndex(idx + 1); }}
+                        className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-slate-900 border-2 border-slate-600 group-hover:border-emerald-400 flex items-center justify-center cursor-pointer hover:scale-125 hover:bg-emerald-500 hover:text-slate-950 transition-all z-20"
+                        title="Click to add node step after this"
+                      >
+                        <Plus className="h-3 w-3 text-slate-400 group-hover:text-emerald-400 hover:text-slate-950" />
+                      </div>
+
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="h-5 w-5 rounded bg-slate-800 text-slate-300 text-[10px] font-extrabold flex items-center justify-center shrink-0 border border-slate-700">
+                            #{idx + 1}
+                          </span>
+                          <h4 className="text-xs font-bold text-slate-100 group-hover:text-emerald-400 transition-colors truncate">
+                            {stepText.split(":")[0]}
+                          </h4>
+                        </div>
+
+                        {/* Delete Node Button */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteStep(idx); }}
+                          className="p-1 rounded text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                          title="Delete Node"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      <p className="text-[10px] font-mono text-slate-400 bg-slate-950 p-1.5 rounded-lg border border-slate-800/80 truncate mt-2">
+                        {stepText}
+                      </p>
+                    </div>
+                  )
+                })}
+
               </div>
             </div>
 
             {/* RIGHT SIDE INSPECTOR DRAWER (n8n NODE SETTINGS) */}
             {inspectorNodeIdx !== null && activeWorkflow.steps[inspectorNodeIdx] && (
-              <div className="w-88 border-l border-slate-800 bg-slate-900/90 backdrop-blur-md p-4 flex flex-col justify-between shrink-0 z-30 shadow-2xl animate-in slide-in-from-right-6 duration-200">
+              <div className="w-88 border-l border-slate-800 bg-slate-900/95 backdrop-blur-md p-4 flex flex-col justify-between shrink-0 z-30 shadow-2xl animate-in slide-in-from-right-6 duration-200">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div className="flex items-center gap-2">
@@ -983,7 +1010,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                       onClick={() => handleLoadBlueprint(bp)}
                       className="w-full text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 cursor-pointer"
                     >
-                      Load into n8n Graph Canvas
+                      Load into 2D Node Graph
                     </Button>
                   </CardFooter>
                 </Card>
@@ -1044,12 +1071,54 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
 
       </div>
 
+      {/* FLOATING NODE PICKER (+) MODAL */}
+      <Dialog open={nodePickerInsertIndex !== null} onOpenChange={(open) => !open && setNodePickerInsertIndex(null)}>
+        <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-xs font-extrabold uppercase text-emerald-400 flex items-center gap-2">
+              <Plus className="h-4 w-4" /> Add Node to 2D Graph Sequence
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {PALETTE_NODES.map(node => (
+                <div
+                  key={node.id}
+                  onClick={() => handleInsertNodeStep(node.defaultStep, nodePickerInsertIndex !== null ? nodePickerInsertIndex : undefined)}
+                  className="p-3 rounded-xl border border-slate-800 bg-slate-950 hover:border-emerald-500 hover:bg-slate-800/80 transition-all cursor-pointer flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className={`h-7 w-7 rounded-lg ${node.color} flex items-center justify-center shrink-0`}>
+                      {getNodeIcon(node.iconName)}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-200 group-hover:text-emerald-400 transition-colors">
+                        {node.label}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 line-clamp-1">{node.desc}</p>
+                    </div>
+                  </div>
+                  <Plus className="h-4 w-4 text-slate-500 group-hover:text-emerald-400" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setNodePickerInsertIndex(null)} className="text-xs bg-slate-950 border-slate-800 text-slate-300">
+              Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* DRY-RUN SANDBOX TESTER MODAL */}
       <Dialog open={showSandboxModal} onOpenChange={setShowSandboxModal}>
         <DialogContent className="max-w-xl bg-slate-900 border-slate-800 text-slate-100">
           <DialogHeader>
             <DialogTitle className="text-sm font-bold flex items-center gap-2">
-              <Play className="h-4 w-4 text-emerald-400" /> n8n Node Graph Sandbox Tester
+              <Play className="h-4 w-4 text-emerald-400" /> n8n 2D Graph Sandbox Tester
             </DialogTitle>
           </DialogHeader>
 
