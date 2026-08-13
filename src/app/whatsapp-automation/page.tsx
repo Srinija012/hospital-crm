@@ -146,11 +146,51 @@ export default function WhatsAppAutomation() {
     loadTemplate()
   }, [selectedTemplateKey, activeLang])
 
-  // Load the PREVIEW template (for the phone mockup) independently from the editing template
+  // Load the PREVIEW template — always derives from the current saved English (custom) template
   React.useEffect(() => {
     const loadPreviewTemplate = async () => {
-      const text = await dbGetWhatsAppTemplate(selectedTemplateKey, previewLang)
-      setPreviewText(text || "")
+      // For English preview just show the textarea directly
+      if (previewLang === "English") {
+        const text = await dbGetWhatsAppTemplate(selectedTemplateKey, "English")
+        setPreviewText(text || "")
+        return
+      }
+
+      // For other languages: always translate the current saved English template on-the-fly
+      // so the preview ALWAYS shows the user's custom message, not stale old defaults
+      const englishText = await dbGetWhatsAppTemplate(selectedTemplateKey, "English")
+      if (!englishText) {
+        setPreviewText("")
+        return
+      }
+
+      const langCodeMap: Record<string, string> = {
+        Telugu: "te", Hindi: "hi", Tamil: "ta",
+        Kannada: "kn", Malayalam: "ml", Marathi: "mr"
+      }
+      const targetCode = langCodeMap[previewLang]
+      if (!targetCode) {
+        setPreviewText(englishText)
+        return
+      }
+
+      try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetCode}&dt=t&q=${encodeURIComponent(englishText)}`
+        const res = await fetch(url)
+        const data = await res.json()
+        if (data && data[0]) {
+          const translated = data[0].map((x: any) => x[0]).join("")
+          // Save this fresh translation so it's used when actually sending messages
+          await dbSaveWhatsAppTemplate(selectedTemplateKey, previewLang, translated)
+          setPreviewText(translated)
+        } else {
+          setPreviewText(englishText)
+        }
+      } catch {
+        // On error, fall back to whatever is saved
+        const fallback = await dbGetWhatsAppTemplate(selectedTemplateKey, previewLang)
+        setPreviewText(fallback || englishText)
+      }
     }
     loadPreviewTemplate()
   }, [selectedTemplateKey, previewLang])
