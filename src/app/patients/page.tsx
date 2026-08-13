@@ -245,29 +245,62 @@ function PatientsRegistryContent() {
   React.useEffect(() => {
     const loadRegTemplates = async () => {
       try {
-        const welcomeText = await dbGetWhatsAppTemplate("welcome", formLang)
-        setRegWelcomeTemplate(welcomeText || TRANSLATED_WELCOME[formLang] || TRANSLATED_WELCOME.English || "Hello {Patient Name}, welcome!")
-        
+        // --- Welcome template ---
+        let welcomeText = await dbGetWhatsAppTemplate("welcome", formLang)
+        const hardcodedWelcomeForLang = TRANSLATED_WELCOME[formLang] || TRANSLATED_WELCOME.English || ""
+        const isWelcomeDefault = !welcomeText || welcomeText === hardcodedWelcomeForLang
+
+        // If the saved template for this language is just the default, try to use
+        // the custom English template and auto-translate it
+        if (isWelcomeDefault && formLang !== "English") {
+          const englishText = await dbGetWhatsAppTemplate("welcome", "English")
+          const hardcodedEnglish = TRANSLATED_WELCOME.English || ""
+          const hasCustomEnglish = englishText && englishText !== hardcodedEnglish
+          if (hasCustomEnglish) {
+            const langCodeMap: Record<string, string> = {
+              Telugu: "te", Hindi: "hi", Tamil: "ta",
+              Kannada: "kn", Malayalam: "ml", Marathi: "mr",
+              Bengali: "bn", Gujarati: "gu", Punjabi: "pa"
+            }
+            const targetCode = langCodeMap[formLang]
+            if (targetCode) {
+              try {
+                const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetCode}&dt=t&q=${encodeURIComponent(englishText)}`
+                const res = await fetch(url)
+                const data = await res.json()
+                if (data && data[0]) {
+                  const translated = data[0].map((x: any) => x[0]).join("")
+                  await dbSaveWhatsAppTemplate("welcome", formLang, translated)
+                  welcomeText = translated
+                }
+              } catch {
+                // Fall through to default
+              }
+            }
+          }
+        }
+
+        setRegWelcomeTemplate(welcomeText || hardcodedWelcomeForLang || "Hello {Patient Name}, welcome!")
+
+        // --- Follow-up reminder template ---
         const fupText = await dbGetWhatsAppTemplate("follow_up_reminder", formLang)
-        const fupTemplate = fupText || MULTILINGUAL_TEMPLATES.follow_up_reminder?.[formLang] || MULTILINGUAL_TEMPLATES.follow_up_reminder?.English || "Dear {Patient Name}, this is a reminder from our clinic for your scheduled follow-up on {Date} with {Doctor}.";
-        
+        const fupTemplate = fupText || MULTILINGUAL_TEMPLATES.follow_up_reminder?.[formLang] || MULTILINGUAL_TEMPLATES.follow_up_reminder?.English || "Dear {Patient Name}, this is a reminder from our clinic for your scheduled follow-up on {Date} with {Doctor}."
         setFormFupMessage(prev => {
           if (!prev || isDefaultEnglishMessage(prev)) {
-            return fupTemplate;
+            return fupTemplate
           }
-          return prev;
-        });
+          return prev
+        })
       } catch (err) {
         console.warn("Failed to load registration templates:", err)
         setRegWelcomeTemplate(TRANSLATED_WELCOME[formLang] || TRANSLATED_WELCOME.English || "Hello {Patient Name}, welcome!")
-        
-        const fupTemplate = MULTILINGUAL_TEMPLATES.follow_up_reminder?.[formLang] || MULTILINGUAL_TEMPLATES.follow_up_reminder?.English || "Dear {Patient Name}, this is a reminder from our clinic for your scheduled follow-up on {Date} with {Doctor}.";
+        const fupTemplate = MULTILINGUAL_TEMPLATES.follow_up_reminder?.[formLang] || MULTILINGUAL_TEMPLATES.follow_up_reminder?.English || "Dear {Patient Name}, this is a reminder from our clinic for your scheduled follow-up on {Date} with {Doctor}."
         setFormFupMessage(prev => {
           if (!prev || isDefaultEnglishMessage(prev)) {
-            return fupTemplate;
+            return fupTemplate
           }
-          return prev;
-        });
+          return prev
+        })
       }
     }
     loadRegTemplates()

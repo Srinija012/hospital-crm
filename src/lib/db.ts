@@ -1529,7 +1529,50 @@ async function getResolvedMessageTemplate(
   }
 
   const lang = patient.preferredLanguage || "English";
+
+  // Try to fetch saved template for this patient's language
   let text = await dbGetWhatsAppTemplate(templateKey, lang);
+
+  // Check if this is just the hardcoded default (user hasn't saved a custom version for this language)
+  const hardcodedForLang = MULTILINGUAL_TEMPLATES[templateKey]?.[lang] || "";
+  const isDefaultFallback = !text || text === hardcodedForLang;
+
+  if (isDefaultFallback && lang !== "English") {
+    // Check if the user has saved a CUSTOM English template
+    const englishText = await dbGetWhatsAppTemplate(templateKey, "English");
+    const hardcodedEnglish = MULTILINGUAL_TEMPLATES[templateKey]?.English || "";
+    const hasCustomEnglish = englishText && englishText !== hardcodedEnglish;
+
+    if (hasCustomEnglish) {
+      // Auto-translate the custom English template to the patient's language
+      const langCodeMap: Record<string, string> = {
+        Telugu: "te", Hindi: "hi", Tamil: "ta",
+        Kannada: "kn", Malayalam: "ml", Marathi: "mr",
+        Bengali: "bn", Gujarati: "gu", Punjabi: "pa"
+      };
+      const targetCode = langCodeMap[lang];
+      if (targetCode && typeof window !== "undefined") {
+        try {
+          const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetCode}&dt=t&q=${encodeURIComponent(englishText)}`;
+          const res = await fetch(url);
+          const data = await res.json();
+          if (data && data[0]) {
+            const translated = data[0].map((x: any) => x[0]).join("");
+            // Save the translated version so future sends don't need to re-translate
+            await dbSaveWhatsAppTemplate(templateKey, lang, translated);
+            text = translated;
+          }
+        } catch {
+          // Translation failed — fall through to use whatever we have
+        }
+      }
+    }
+  }
+
+  // If still empty, fall back to hardcoded default
+  if (!text) {
+    text = hardcodedForLang || MULTILINGUAL_TEMPLATES[templateKey]?.English || "";
+  }
 
   const dateStr = context.appointment?.date || new Date().toISOString().split('T')[0];
   const timeStr = context.appointment?.timeSlot || "10:00 AM";
