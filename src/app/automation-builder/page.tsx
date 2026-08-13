@@ -527,7 +527,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
   }
 
   return (
-    <div className={`h-screen w-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden ${embedded ? 'p-0' : ''}`}>
+    <div className={`h-full w-full bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden ${embedded ? 'p-0' : ''}`}>
       
       {/* Toast Notification Banner */}
       {toastMsg && (

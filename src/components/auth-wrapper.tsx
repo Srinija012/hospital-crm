@@ -186,6 +186,8 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
     )
   }
 
+  const isFullBleed = pathname === "/automation-builder" || pathname === "/whatsapp-automation"
+
   return (
     <WhatsAppProvider>
       <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
@@ -198,7 +200,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
           <Header />
           
           {/* Sub-page Content */}
-          <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">
+          <main className={`flex-1 relative ${isFullBleed ? 'p-0 overflow-hidden' : 'overflow-y-auto p-6 md:p-8'}`}>
             {getMigrationError() && (
               <div className="bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 p-4 rounded-xl mb-6 text-xs font-semibold flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-rose-500 shrink-0" />
