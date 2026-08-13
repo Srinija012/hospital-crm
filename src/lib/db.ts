@@ -547,6 +547,44 @@ export async function dbDeleteDoctor(id: string): Promise<Doctor[]> {
 
 // ─── PATIENTS ───
 export async function dbGetPatients(): Promise<Patient[]> {
+  if (typeof window !== 'undefined') {
+    try {
+      const { data } = await supabase.from('patients').select('*');
+      if (data && data.length > 0) {
+        const remotePatients: Patient[] = data.map((sp: any) => ({
+          id: sp.id,
+          name: sp.name,
+          age: sp.age || 30,
+          gender: sp.gender || 'Male',
+          dob: sp.dob || '1990-01-01',
+          phone: sp.phone || '',
+          alternatePhone: sp.alternate_phone || '',
+          email: sp.email || '',
+          addressInfo: sp.address_info || { address: '', city: '', state: '', country: '', pincode: '' },
+          bloodGroup: sp.blood_group || 'A+',
+          existingConditions: sp.existing_conditions || '',
+          allergies: sp.allergies || '',
+          doctorAssignedId: sp.doctor_assigned_id || '',
+          doctorAssignedName: sp.doctor_assigned_name || 'Unassigned Staff',
+          preferredLanguage: sp.preferred_language || 'English',
+          preferredContactMethod: sp.preferred_contact_method || 'WhatsApp',
+          whatsappOptIn: sp.whatsapp_opt_in !== undefined ? sp.whatsapp_opt_in : true,
+          lastVisit: sp.last_visit || new Date().toISOString().split('T')[0],
+          vitals: sp.vitals || [],
+          medicalHistory: sp.medical_history || [],
+          prescriptions: sp.prescriptions || [],
+          communications: [],
+          enableAutomatedFollowUp: sp.enable_automated_follow_up !== undefined ? sp.enable_automated_follow_up : true,
+          customFollowUpDays: sp.custom_follow_up_days || 14,
+          customFollowUpMessage: sp.custom_follow_up_message || '',
+          archived: sp.archived || false,
+          createdAt: sp.created_at || new Date().toISOString()
+        }));
+        await db.patients.bulkPut(remotePatients);
+      }
+    } catch (err) {}
+  }
+
   const patients = await db.patients.toArray();
   const role = getActiveRole();
   const showArchived = role === 'Clinic Admin' || role === 'Super Admin';
