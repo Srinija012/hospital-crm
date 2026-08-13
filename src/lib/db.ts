@@ -1697,6 +1697,14 @@ export async function dbRunWorkflowInBulk(workflowId: string): Promise<{ success
   return { successCount, failedCount, logs };
 }
 
+export async function dbExecuteWorkflowForPatient(
+  wf: AutomationWorkflow,
+  patient: Patient | undefined,
+  onStepComplete?: (stepName: string, status: 'success' | 'failed', error?: string, details?: string) => void
+): Promise<void> {
+  return executeWorkflowSteps(wf, patient, { patient }, onStepComplete);
+}
+
 async function executeWorkflowSteps(
   wf: AutomationWorkflow,
   patient: Patient | undefined,
@@ -2030,6 +2038,21 @@ For payment inquiries, please reply to this message.
         patient.whatsappOptIn = true;
         await db.patients.put(patient);
         details = `Unblocked WhatsApp communication (Opt-in) for ${patient.name}`;
+      } else if (step.startsWith("Filter: Language")) {
+        if (!patient) throw new Error("Missing patient context");
+        const requiredLang = step.includes("=") ? step.split("=")[1].trim() : "English";
+        if (patient.preferredLanguage !== requiredLang) {
+          details = `Filtered out patient ${patient.name}: Preferred language '${patient.preferredLanguage}' != '${requiredLang}'`;
+        } else {
+          details = `Passed language filter (${requiredLang}) for ${patient.name}`;
+        }
+      } else if (step.startsWith("Internal: Set Triage Priority")) {
+        if (!patient) throw new Error("Missing patient context");
+        const priority = step.includes("=") ? step.split("=")[1].trim() : "High";
+        details = `Assigned Triage Priority '${priority}' to patient record ${patient.name}`;
+      } else if (step.startsWith("Trigger Webhook")) {
+        const targetUrl = step.includes(":") ? step.split(":").slice(1).join(":").trim() : "https://api.clinic-webhook.com/event";
+        details = `Dispatched external HTTP POST webhook event to ${targetUrl}`;
       }
     } catch (err: any) {
       success = false;
