@@ -236,10 +236,10 @@ export default function CommunicationCenter() {
             {/* Self avatar */}
             <div className="h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
               style={{ background: "linear-gradient(135deg, #25D366, #128C7E)" }}>
-              {waUser?.name?.charAt(0) || "A"}
+              {waUser?.name?.charAt(0) || "O"}
             </div>
             <div>
-              <div className="text-xs font-bold text-foreground">{waUser?.name || "Aegis CRM"}</div>
+              <div className="text-xs font-bold text-foreground">{waUser?.name || "OnlyClinic"}</div>
               <div className="text-[10px] text-muted-foreground font-medium">
                 {waStatus === "connected" ? (
                   <span className="text-emerald-500 font-semibold flex items-center gap-1">
@@ -628,7 +628,7 @@ export default function CommunicationCenter() {
               <MessageSquare className="h-12 w-12 text-muted-foreground/40" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-foreground">Aegis WhatsApp Inbox</h3>
+              <h3 className="text-xl font-bold text-foreground">OnlyClinic WhatsApp Inbox</h3>
               <p className="text-sm text-muted-foreground mt-2 max-w-sm leading-relaxed">
                 Send and receive messages from your registered patients. Select a conversation from the left to begin.
               </p>

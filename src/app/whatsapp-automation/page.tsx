@@ -37,7 +37,7 @@ const TEMPLATE_DATABASE: Record<string, Record<string, string>> = {
     Malayalam: "പ്രിയ {Patient Name}, {Date}-ൽ {Doctor}-യുമായുള്ള ഫോളो-അപ്പ് സന്ദർശനം ഓർമ്മപ്പെടുത്തൽ. ദയവായി സ്ഥിരീകരിക്കുക."
   },
   welcome: {
-    English: "Hello {Patient Name}, thank you for registering with Aegis CRM. We are happy to assist you.",
+    English: "Hello {Patient Name}, thank you for registering with OnlyClinic. We are happy to assist you.",
     Telugu: "హలో {Patient Name}, Aegis CRM లో నమోదు చేసుకున్నందుకు ధన్యవాదాలు. మీకు సహాయం చేయడానికి మేము సంతోషిస్తున్నాము.",
     Hindi: "नमस्ते {Patient Name}, Aegis CRM में पंजीकरण करने के लिए धन्यवाद। हम आपकी सहायता करने के लिए खुश हैं।",
     Tamil: "வணக்கம் {Patient Name}, Aegis CRM இல் பதிவு செய்ததற்கு நன்றி. உங்களுக்கு உதவ நாங்கள் மகிழ்ச்சியடைகிறோம்.",

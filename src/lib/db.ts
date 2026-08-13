@@ -1845,7 +1845,7 @@ Medical Consultation / Treatment   ${amountStr}
 --------------------------------------------------
 TOTAL DUE:                         ${amountStr}
 ==================================================
-Thank you for choosing Aegis General Clinic.
+Thank you for choosing OnlyClinic.
 For payment inquiries, please reply to this message.
 ==================================================
 `;
@@ -1982,7 +1982,7 @@ For payment inquiries, please reply to this message.
         } else if (step === "Send Email: Prescription") {
           text = `Dear ${patient.name}, please find attached your prescription details.`;
         } else {
-          text = `Dear ${patient.name}, welcome to Aegis Medical Clinic. We are pleased to have you register with us.`;
+          text = `Dear ${patient.name}, welcome to OnlyClinic. We are pleased to have you register with us.`;
         }
         
         const timestamp = new Date(Date.now() + accumulatedDelayMs).toLocaleDateString("en-US") + " " + new Date(Date.now() + accumulatedDelayMs).toLocaleTimeString("en-US", { hour: '2-digit', minute: '2-digit' });

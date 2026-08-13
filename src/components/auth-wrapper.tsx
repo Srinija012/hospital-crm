@@ -126,7 +126,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
       <div className="flex h-screen w-screen items-center justify-center bg-background text-foreground">
         <div className="flex flex-col items-center gap-4">
           <HeartPulse className="h-12 w-12 text-primary animate-pulse" />
-          <span className="text-sm font-semibold text-muted-foreground animate-pulse">Authenticating Aegis session...</span>
+          <span className="text-sm font-semibold text-muted-foreground animate-pulse">Authenticating OnlyClinic session...</span>
         </div>
       </div>
     )

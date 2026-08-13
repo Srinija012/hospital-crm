@@ -109,7 +109,7 @@ export default function Dashboard() {
       <div className="flex h-[80vh] items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Heart className="h-12 w-12 text-primary animate-pulse" />
-          <span className="text-sm text-muted-foreground font-semibold">Loading Aegis CRM...</span>
+          <span className="text-sm text-muted-foreground font-semibold">Loading OnlyClinic...</span>
         </div>
       </div>
     )

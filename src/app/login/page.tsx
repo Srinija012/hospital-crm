@@ -142,7 +142,7 @@ export default function LoginPage() {
             <HeartPulse className="h-7 w-7 animate-pulse" />
           </div>
           <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Aegis CRM
+            OnlyClinic
           </h1>
           <p className="text-xs text-muted-foreground font-medium">Healthcare Administration SaaS Portal</p>
         </div>

@@ -245,7 +245,7 @@ function PatientPortalContent() {
                   Welcome to Your Patient Portal, {activePatient.name}
                 </CardTitle>
                 <CardDescription className="text-xxs text-muted-foreground font-semibold">
-                  Aegis Patient ID: <strong className="font-mono text-primary">{activePatient.id}</strong> | Preferred Contact Method: {activePatient.preferredContactMethod}
+                  OnlyClinic Patient ID: <strong className="font-mono text-primary">{activePatient.id}</strong> | Preferred Contact Method: {activePatient.preferredContactMethod}
                 </CardDescription>
               </CardHeader>
               <CardContent className="text-xxs leading-relaxed font-semibold text-foreground/80 space-y-2">

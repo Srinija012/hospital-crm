@@ -23,9 +23,9 @@ export default function SettingsPage() {
   const [successMsg, setSuccessMsg] = React.useState("")
 
   // Form states
-  const [hName, setHName] = React.useState("Aegis General Hospital")
+  const [hName, setHName] = React.useState("OnlyClinic")
   const [hAddress, setHAddress] = React.useState("100 Healthcare Parkway, Medical District")
-  const [hContact, setHContact] = React.useState("director@aegisgeneral.com")
+  const [hContact, setHContact] = React.useState("director@onlyclinic.com")
   const [hPhone, setHPhone] = React.useState("+1 (555) 010-0900")
   
   const [shiftStart, setShiftStart] = React.useState("08:00 AM")

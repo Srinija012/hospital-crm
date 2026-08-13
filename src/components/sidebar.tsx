@@ -47,7 +47,7 @@ export function Sidebar({ className }: { className?: string }) {
   }
   const [session, setSession] = React.useState<{ name: string; role: string; avatar: string } | null>(null)
 
-  const [clinicName, setClinicName] = React.useState("Aegis CRM")
+  const [clinicName, setClinicName] = React.useState("OnlyClinic")
   const [clinicSub, setClinicSub] = React.useState("Healthcare SaaS Engine")
 
   React.useEffect(() => {
@@ -68,7 +68,7 @@ export function Sidebar({ className }: { className?: string }) {
           }
         } catch (e) {}
       }
-      setClinicName("Aegis CRM")
+      setClinicName("OnlyClinic")
       setClinicSub("Healthcare SaaS Engine")
     }
 
