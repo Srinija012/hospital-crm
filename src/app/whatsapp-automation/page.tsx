@@ -325,24 +325,26 @@ export default function WhatsAppAutomation() {
                         ))}
                       </div>
                     </div>
+
+                    {/* Save buttons — inline so always visible without scrolling */}
+                    <div className="flex justify-end gap-2 pt-3 border-t border-border/40 mt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={isTranslatingAll}
+                        onClick={handleSaveAndTranslateAll}
+                        className="cursor-pointer text-xs gap-1.5"
+                        title="Saves this template and auto-translates it to Telugu, Hindi, Tamil, Kannada, Malayalam, and Marathi"
+                      >
+                        <Languages className="h-3.5 w-3.5 text-primary" />
+                        {isTranslatingAll ? "Translating..." : "Save & Auto-Translate All"}
+                      </Button>
+                      <Button type="submit" size="sm" className="cursor-pointer">
+                        <Save className="h-4 w-4 mr-1.5" /> Save Template
+                      </Button>
+                    </div>
                   </CardContent>
-                  <CardFooter className="justify-end border-t border-border/40 pt-4 gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={isTranslatingAll}
-                      onClick={handleSaveAndTranslateAll}
-                      className="cursor-pointer text-xs gap-1.5"
-                      title="Saves this template and auto-translates it to Telugu, Hindi, Tamil, Kannada, Malayalam, and Marathi"
-                    >
-                      <Languages className="h-3.5 w-3.5 text-primary" />
-                      {isTranslatingAll ? "Translating..." : "Save & Auto-Translate All Languages"}
-                    </Button>
-                    <Button type="submit" size="sm" className="cursor-pointer">
-                      <Save className="h-4 w-4 mr-1.5" /> Save Template
-                    </Button>
-                  </CardFooter>
                 </form>
               </Card>
             </TabsContent>
@@ -618,9 +620,9 @@ export default function WhatsAppAutomation() {
           </div>
 
 
-        {/* Right side live rendering simulator */}
+        {/* Right side live rendering simulator — sticky so it doesn't push left column down */}
         {activeTab !== "workflows" && (
-          <Card className="flex flex-col justify-between shadow-xs">
+          <Card className="flex flex-col justify-between shadow-xs self-start sticky top-0">
             <div>
               <CardHeader className="pb-3 border-b border-border/40 bg-muted/10">
                 <CardTitle className="text-sm font-bold flex items-center gap-1.5">
