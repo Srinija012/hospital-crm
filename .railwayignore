@@ -1,0 +1,16 @@
+# Don't send these to Railway — backend only needs whatsapp-server.js
+dist/
+src/
+public/
+whatsapp-session/
+whatsapp-media/
+whatsapp-chats.json
+whatsapp-messages.json
+whatsapp-contacts.json
+.vercel
+tsconfig.json
+tsconfig.tsbuildinfo
+vite.config.ts
+postcss.config.mjs
+eslint.config.mjs
+index.html
