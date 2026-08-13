@@ -2,6 +2,9 @@
   "name": "hospital-crm",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "dev:all": "concurrently \"npm run dev\" \"node whatsapp-server.js\"",
