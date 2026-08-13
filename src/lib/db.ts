@@ -523,6 +523,11 @@ export async function dbSaveDoctor(doc: Omit<Doctor, 'id' | 'status'> & { id?: s
 export async function dbDeleteDoctor(id: string): Promise<Doctor[]> {
   dbEnforceRole(['Clinic Admin', 'Super Admin']);
   await db.doctors.delete(id);
+  (async () => {
+    try {
+      await supabase.from('doctors').delete().eq('id', id);
+    } catch (err: any) {}
+  })();
   return dbGetDoctors();
 }
 
@@ -757,6 +762,25 @@ export async function dbMovePatientToTrash(patientId: string): Promise<void> {
     await db.trashedPatients.add(trashedRecord);
     await db.patients.delete(patientId);
   });
+
+  (async () => {
+    try {
+      // Remove from main patients table in Supabase
+      await supabase.from('patients').delete().eq('id', patientId);
+      // Upsert into trashed_patients table in Supabase
+      await supabase.from('trashed_patients').upsert([{
+        trashed_id: String(trashedRecord.trashedId || patientId),
+        id: patientId,
+        name: patient.name,
+        phone: patient.phone,
+        deleted_at: trashedRecord.deletedAt,
+        deleted_by: actorName,
+        patient_data: patient
+      }]);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Trash Warning]', err?.message || err);
+    }
+  })();
 }
 
 export async function dbRestorePatientFromTrash(trashedId: string): Promise<void> {
@@ -771,11 +795,65 @@ export async function dbRestorePatientFromTrash(trashedId: string): Promise<void
     await db.patients.put(restoredPatient);
     await db.trashedPatients.delete(trashedId);
   });
+
+  (async () => {
+    try {
+      // Delete from trashed_patients table in Supabase
+      await supabase.from('trashed_patients').delete().eq('trashed_id', String(trashedId));
+      await supabase.from('trashed_patients').delete().eq('id', String(restoredPatient.id));
+      // Re-insert into main patients table in Supabase
+      await supabase.from('patients').upsert([{
+        id: restoredPatient.id,
+        name: restoredPatient.name,
+        age: restoredPatient.age,
+        gender: restoredPatient.gender,
+        dob: restoredPatient.dob,
+        phone: restoredPatient.phone,
+        alternate_phone: restoredPatient.alternatePhone,
+        email: restoredPatient.email,
+        address_info: restoredPatient.addressInfo,
+        blood_group: restoredPatient.bloodGroup,
+        existing_conditions: restoredPatient.existingConditions,
+        allergies: restoredPatient.allergies,
+        doctor_assigned_id: restoredPatient.doctorAssignedId,
+        doctor_assigned_name: restoredPatient.doctorAssignedName,
+        preferred_language: restoredPatient.preferredLanguage,
+        preferred_contact_method: restoredPatient.preferredContactMethod,
+        whatsapp_opt_in: restoredPatient.whatsappOptIn,
+        last_visit: restoredPatient.lastVisit,
+        vitals: restoredPatient.vitals,
+        medical_history: restoredPatient.medicalHistory,
+        prescriptions: restoredPatient.prescriptions,
+        enable_automated_follow_up: restoredPatient.enableAutomatedFollowUp,
+        custom_follow_up_days: restoredPatient.customFollowUpDays,
+        custom_follow_up_message: restoredPatient.customFollowUpMessage,
+        archived: false,
+        created_at: restoredPatient.createdAt
+      }]);
+    } catch (err: any) {
+      console.warn('[Supabase Sync Restore Warning]', err?.message || err);
+    }
+  })();
 }
 
 export async function dbPermanentlyDeleteTrashedPatient(trashedId: string): Promise<void> {
   dbEnforceRole(['Clinic Admin', 'Super Admin']);
+  const trashed = await db.trashedPatients.get(trashedId);
+  const targetPatientId = trashed ? trashed.id : trashedId;
+
   await db.trashedPatients.delete(trashedId);
+
+  (async () => {
+    try {
+      // Delete permanently from both patients and trashed_patients tables in Supabase
+      await supabase.from('patients').delete().eq('id', String(targetPatientId));
+      await supabase.from('patients').delete().eq('id', String(trashedId));
+      await supabase.from('trashed_patients').delete().eq('trashed_id', String(trashedId));
+      await supabase.from('trashed_patients').delete().eq('id', String(targetPatientId));
+    } catch (err: any) {
+      console.warn('[Supabase Sync Permanent Delete Warning]', err?.message || err);
+    }
+  })();
 }
 
 // ─── COMMUNICATIONS ───
@@ -999,6 +1077,13 @@ export async function dbDeleteAppointment(id: string): Promise<Appointment[]> {
   const appointments = await getSetting<Appointment[]>('h_appointments_up', []);
   const filtered = appointments.filter(a => a.id !== id);
   await setSetting('h_appointments_up', filtered);
+
+  (async () => {
+    try {
+      await supabase.from('appointments').delete().eq('id', id);
+    } catch (err: any) {}
+  })();
+
   return filtered;
 }
 
@@ -1165,6 +1250,13 @@ export async function dbCompleteFollowUp(id: string): Promise<FollowUp[]> {
   const followups = await getSetting<FollowUp[]>('h_followups_up', []);
   const updated = followups.map(f => f.id === id ? { ...f, status: 'Completed' as const } : f);
   await setSetting('h_followups_up', updated);
+
+  (async () => {
+    try {
+      await supabase.from('follow_ups').update({ status: 'Completed' }).eq('id', id);
+    } catch (err: any) {}
+  })();
+
   return updated;
 }
 
@@ -1173,6 +1265,13 @@ export async function dbDeleteFollowUp(id: string): Promise<FollowUp[]> {
   const followups = await getSetting<FollowUp[]>('h_followups_up', []);
   const updated = followups.filter(f => f.id !== id);
   await setSetting('h_followups_up', updated);
+
+  (async () => {
+    try {
+      await supabase.from('follow_ups').delete().eq('id', id);
+    } catch (err: any) {}
+  })();
+
   return updated;
 }
 
@@ -1302,6 +1401,13 @@ export async function dbPayInvoice(id: string): Promise<Invoice[]> {
 export async function dbDeleteInvoice(id: string): Promise<Invoice[]> {
   dbEnforceRole(['Clinic Admin', 'Super Admin']);
   await db.invoices.delete(id);
+
+  (async () => {
+    try {
+      await supabase.from('invoices').delete().eq('id', id);
+    } catch (err: any) {}
+  })();
+
   return dbGetInvoices();
 }
 
