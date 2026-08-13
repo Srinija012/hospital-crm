@@ -222,6 +222,9 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
   const [draggingNodeId, setDraggingNodeId] = React.useState<number | string | null>(null)
   const [dragOffset, setDragOffset] = React.useState<NodePosition>({ x: 0, y: 0 })
 
+  // Canvas Viewport Reference for Isolated Wheel Zooming
+  const playgroundCanvasRef = React.useRef<HTMLDivElement>(null)
+
   // UI Drawer & Modal States
   const [sidebarOpen, setSidebarOpen] = React.useState<boolean>(true)
   const [inspectorNodeIdx, setInspectorNodeIdx] = React.useState<number | null>(null)
@@ -297,6 +300,24 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
       autoAlign2DPositions(activeWorkflow.steps.length)
     }
   }, [activeWorkflow?.id, activeWorkflow?.steps.length])
+
+  // NON-PASSIVE WHEEL LISTENER ATTACHED ONLY TO PLAYGROUND CANVAS (PREVENTS SIDEBAR & PAGE ZOOMING)
+  React.useEffect(() => {
+    const canvasEl = playgroundCanvasRef.current
+    if (!canvasEl) return
+
+    const handleCanvasWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const delta = e.deltaY < 0 ? 8 : -8
+      setZoomLevel(prev => Math.min(180, Math.max(40, prev + delta)))
+    }
+
+    canvasEl.addEventListener("wheel", handleCanvasWheel, { passive: false })
+    return () => {
+      canvasEl.removeEventListener("wheel", handleCanvasWheel)
+    }
+  }, [])
 
   // GLOBAL MOUSE MOVE & MOUSE UP HANDLERS FOR ROCK-SOLID DRAGGING & PANNING
   React.useEffect(() => {
@@ -387,16 +408,6 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
 
     setIsPanning(true)
     setPanStart({ x: e.clientX - canvasPan.x, y: e.clientY - canvasPan.y })
-  }
-
-  // MOUSE WHEEL ZOOM EXCLUSIVELY FOR CANVAS NODE LAYER
-  const handleWheelZoom = (e: React.WheelEvent) => {
-    e.preventDefault()
-    if (e.deltaY < 0) {
-      setZoomLevel(prev => Math.min(160, prev + 5))
-    } else {
-      setZoomLevel(prev => Math.max(50, prev - 5))
-    }
   }
 
   // NODE 2D DRAGGING START HANDLER
@@ -537,8 +548,8 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
         </div>
       )}
 
-      {/* 100% STATIONARY TOP CONTROL TOOLBAR */}
-      <header className="h-14 border-b border-slate-800 bg-slate-900 px-4 flex items-center justify-between z-40 shrink-0 select-none">
+      {/* 100% STATIONARY TOP CONTROL TOOLBAR (NEVER ZOOMS OR SCALES) */}
+      <header className="h-14 border-b border-slate-800 bg-slate-900 px-4 flex items-center justify-between z-40 shrink-0 select-none transform-none">
         
         {/* Left: Workflow Selector & Name */}
         <div className="flex items-center gap-3">
@@ -667,7 +678,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
 
       {/* 100% STATIONARY HORIZONTAL STEP NODE NAVIGATOR BAR */}
       {activeTab === "builder" && activeWorkflow && (
-        <div className="h-10 bg-slate-900 border-b border-slate-800 px-4 flex items-center gap-2 text-xs overflow-x-auto z-40 shrink-0 select-none">
+        <div className="h-10 bg-slate-900 border-b border-slate-800 px-4 flex items-center gap-2 text-xs overflow-x-auto z-40 shrink-0 select-none transform-none">
           <span className="text-[10px] font-extrabold uppercase text-slate-400 flex items-center gap-1 shrink-0">
             <Compass className="h-3.5 w-3.5 text-emerald-400" /> Jump to Step:
           </span>
@@ -704,8 +715,8 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
         {/* TAB 1: 2D n8n INFINITE CANVAS GRAPH */}
         {activeTab === "builder" && activeWorkflow && (
           <>
-            {/* 100% STATIONARY PALETTE LIBRARY SIDEBAR */}
-            <div className={`n8n-sidebar transition-all duration-300 border-r border-slate-800 bg-slate-900 flex flex-col shrink-0 z-30 select-none ${sidebarOpen ? 'w-72' : 'w-12'}`}>
+            {/* 100% STATIONARY PALETTE LIBRARY SIDEBAR (NEVER ZOOMS OR SCALES) */}
+            <div className={`n8n-sidebar transition-all duration-300 border-r border-slate-800 bg-slate-900 flex flex-col shrink-0 z-30 select-none transform-none ${sidebarOpen ? 'w-72' : 'w-12'}`}>
               
               <div className="p-3 border-b border-slate-800 flex items-center justify-between">
                 {sidebarOpen ? (
@@ -784,10 +795,10 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               )}
             </div>
 
-            {/* CENTER 2D GRAPH CANVAS (PANNING & ZOOMING IS EXCLUSIVELY CONFINED TO THIS INNER CANVAS) */}
+            {/* CENTER WORKFLOW PLAYGROUND CANVAS (ZOOM TRANSFORM APPLIES EXCLUSIVELY TO THIS INNER LAYER) */}
             <div
+              ref={playgroundCanvasRef}
               onMouseDown={handleCanvasMouseDown}
-              onWheel={handleWheelZoom}
               className={`flex-1 bg-slate-950 relative overflow-hidden cursor-grab active:cursor-grabbing ${
                 isPanning ? 'cursor-grabbing' : ''
               }`}
@@ -800,9 +811,9 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               />
 
               {/* FLOATING ZOOM CONTROLS (BOTTOM LEFT) */}
-              <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-slate-900 border border-slate-800 backdrop-blur-md p-1.5 rounded-xl shadow-2xl select-none">
+              <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-slate-900 border border-slate-800 backdrop-blur-md p-1.5 rounded-xl shadow-2xl select-none transform-none">
                 <button
-                  onClick={() => setZoomLevel(prev => Math.max(50, prev - 15))}
+                  onClick={() => setZoomLevel(prev => Math.max(40, prev - 15))}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Zoom Out"
                 >
@@ -810,7 +821,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 </button>
                 <span className="text-[10px] font-mono font-bold text-slate-300 px-1">{zoomLevel}%</span>
                 <button
-                  onClick={() => setZoomLevel(prev => Math.min(160, prev + 15))}
+                  onClick={() => setZoomLevel(prev => Math.min(180, prev + 15))}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 cursor-pointer"
                   title="Zoom In"
                 >
@@ -825,7 +836,7 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
                 </button>
               </div>
 
-              {/* 2D WORKFLOW NODE LAYER (TRANSFORMED & ZOOMED IN/OUT EXCLUSIVELY) */}
+              {/* 2D PLAYGROUND NODE GRAPH LAYER (THIS INNER LAYER IS THE ONLY ELEMENT THAT ZOOMS & PANS) */}
               <div
                 style={{
                   transform: `translate(${canvasPan.x}px, ${canvasPan.y}px) scale(${zoomLevel / 100})`,
@@ -959,9 +970,9 @@ export default function AutomationBuilderPage({ embedded }: { embedded?: boolean
               </div>
             </div>
 
-            {/* 100% STATIONARY NODE INSPECTOR DRAWER */}
+            {/* 100% STATIONARY NODE INSPECTOR DRAWER (NEVER ZOOMS OR SCALES) */}
             {inspectorNodeIdx !== null && activeWorkflow.steps[inspectorNodeIdx] && (
-              <div className="n8n-inspector w-88 border-l border-slate-800 bg-slate-900 p-4 flex flex-col justify-between shrink-0 z-30 shadow-2xl animate-in slide-in-from-right-6 duration-200 select-none">
+              <div className="n8n-inspector w-88 border-l border-slate-800 bg-slate-900 p-4 flex flex-col justify-between shrink-0 z-30 shadow-2xl animate-in slide-in-from-right-6 duration-200 select-none transform-none">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                     <div className="flex items-center gap-2">
