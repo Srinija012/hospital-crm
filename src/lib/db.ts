@@ -18,6 +18,7 @@ import {
   type TrashedPatient
 } from './database';
 import { WHATSAPP_API_URL } from './utils';
+import { supabase } from './supabase';
 
 export type { 
   Patient, 
@@ -604,6 +605,47 @@ export async function dbSavePatient(patient: Omit<Patient, 'id'> & { id?: string
   } as Patient;
 
   await db.patients.put(newPatient);
+
+  // Synchronize registered patient automatically to Supabase Cloud DB
+  (async () => {
+    try {
+      const { error } = await supabase.from('patients').upsert([{
+        id: newPatient.id,
+        name: newPatient.name,
+        age: newPatient.age,
+        gender: newPatient.gender,
+        dob: newPatient.dob,
+        phone: newPatient.phone,
+        alternate_phone: newPatient.alternatePhone,
+        email: newPatient.email,
+        address_info: newPatient.addressInfo,
+        blood_group: newPatient.bloodGroup,
+        existing_conditions: newPatient.existingConditions,
+        allergies: newPatient.allergies,
+        doctor_assigned_id: newPatient.doctorAssignedId,
+        doctor_assigned_name: newPatient.doctorAssignedName,
+        preferred_language: newPatient.preferredLanguage,
+        preferred_contact_method: newPatient.preferredContactMethod,
+        whatsapp_opt_in: newPatient.whatsappOptIn,
+        last_visit: newPatient.lastVisit,
+        vitals: newPatient.vitals,
+        medical_history: newPatient.medicalHistory,
+        prescriptions: newPatient.prescriptions,
+        enable_automated_follow_up: newPatient.enableAutomatedFollowUp,
+        custom_follow_up_days: newPatient.customFollowUpDays,
+        custom_follow_up_message: newPatient.customFollowUpMessage,
+        archived: newPatient.archived,
+        created_at: newPatient.createdAt
+      }]);
+      if (error) {
+        console.warn('[Supabase Sync Warning]', error.message);
+      } else {
+        console.log(`[Supabase Sync Success] Patient ${newPatient.name} (${newPatient.id}) synced to Supabase.`);
+      }
+    } catch (err: any) {
+      console.warn('[Supabase Sync Exception]', err?.message || err);
+    }
+  })();
 
   // NOTE: Welcome WhatsApp is sent exclusively by the "Patient Welcome Journey" workflow
   // triggered below via dbTriggerWorkflow("Patient Registered"). Do NOT add a direct
