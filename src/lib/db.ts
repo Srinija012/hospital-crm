@@ -417,6 +417,20 @@ export async function dbClearAllData(): Promise<void> {
     await db.appSettings.put({ key: 'h_appointments_up', value: [] });
     await db.appSettings.put({ key: 'h_followups_up', value: [] });
   });
+
+  (async () => {
+    try {
+      await supabase.from('patients').delete().neq('id', '___none___');
+      await supabase.from('invoices').delete().neq('id', '___none___');
+      await supabase.from('communications').delete().neq('id', '___none___');
+      await supabase.from('audit_logs').delete().neq('id', '___none___');
+      await supabase.from('trashed_patients').delete().neq('trashed_id', '___none___');
+      await supabase.from('appointments').delete().neq('id', '___none___');
+      await supabase.from('follow_ups').delete().neq('id', '___none___');
+    } catch (err: any) {
+      console.warn('[Supabase Clear All Warning]', err?.message || err);
+    }
+  })();
 }
 
 
@@ -1709,6 +1723,45 @@ export async function dbMergePatients(primaryId: string, secondaryId: string): P
     action: `Merged duplicate patient record (ID: ${secondaryId}, Name: ${secondary.name})`
   });
 
+  (async () => {
+    try {
+      await supabase.from('patients').delete().eq('id', secondaryId);
+      const updatedPrimary = await db.patients.get(primaryId);
+      if (updatedPrimary) {
+        await supabase.from('patients').upsert([{
+          id: updatedPrimary.id,
+          name: updatedPrimary.name,
+          age: updatedPrimary.age,
+          gender: updatedPrimary.gender,
+          dob: updatedPrimary.dob,
+          phone: updatedPrimary.phone,
+          alternate_phone: updatedPrimary.alternatePhone,
+          email: updatedPrimary.email,
+          address_info: updatedPrimary.addressInfo,
+          blood_group: updatedPrimary.bloodGroup,
+          existing_conditions: updatedPrimary.existingConditions,
+          allergies: updatedPrimary.allergies,
+          doctor_assigned_id: updatedPrimary.doctorAssignedId,
+          doctor_assigned_name: updatedPrimary.doctorAssignedName,
+          preferred_language: updatedPrimary.preferredLanguage,
+          preferred_contact_method: updatedPrimary.preferredContactMethod,
+          whatsapp_opt_in: updatedPrimary.whatsappOptIn,
+          last_visit: updatedPrimary.lastVisit,
+          vitals: updatedPrimary.vitals,
+          medical_history: updatedPrimary.medicalHistory,
+          prescriptions: updatedPrimary.prescriptions,
+          enable_automated_follow_up: updatedPrimary.enableAutomatedFollowUp,
+          custom_follow_up_days: updatedPrimary.customFollowUpDays,
+          custom_follow_up_message: updatedPrimary.customFollowUpMessage,
+          archived: updatedPrimary.archived,
+          created_at: updatedPrimary.createdAt
+        }]);
+      }
+    } catch (err: any) {
+      console.warn('[Supabase Sync Merge Warning]', err?.message || err);
+    }
+  })();
+
   return dbGetPatients();
 }
 
@@ -1722,6 +1775,21 @@ export async function dbGetAutoReplies(): Promise<AutoReplyRule[]> {
 export async function dbSaveAutoReplies(rules: AutoReplyRule[]): Promise<AutoReplyRule[]> {
   dbEnforceRole(['Receptionist', 'Clinic Admin', 'Super Admin']);
   await setSetting('h_autoreplies_up', rules);
+
+  (async () => {
+    try {
+      const mappedRules = rules.map(r => ({
+        id: r.id,
+        keyword: r.keyword,
+        reply_text: r.replyText,
+        is_active: r.isActive
+      }));
+      await supabase.from('auto_reply_rules').upsert(mappedRules);
+    } catch (err: any) {
+      console.warn('[Supabase Sync AutoReplies Warning]', err?.message || err);
+    }
+  })();
+
   return rules;
 }
 
